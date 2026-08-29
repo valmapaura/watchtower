@@ -1,5 +1,8 @@
 opencv-python>=4.5
 numpy>=1.21
 
+# Windows local notifications
+winotify>=1.1.0
+
 # testing
 pytest>=7.0

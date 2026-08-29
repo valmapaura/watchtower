@@ -42,3 +42,19 @@ def test_reset_forgets_previous_frame():
     d.reset()
     # After reset, first frame is just a baseline (no motion).
     assert d.detect(_static_frame()) is False
+
+
+def test_motion_score_returns_bool_and_range():
+    d = FrameDiffDetector(sensitivity=0.01)
+    has_motion, score = d.motion_score(_static_frame())  # first frame = baseline
+    assert has_motion is False
+    assert 0 <= score <= 100
+
+
+def test_motion_score_reflects_intensity():
+    d = FrameDiffDetector(sensitivity=0.5)
+    d.motion_score(_static_frame())
+    # No change -> 0 fraction, score near 0, no motion.
+    has_motion, score = d.motion_score(_static_frame())
+    assert has_motion is False
+    assert score == 0.0

@@ -38,6 +38,32 @@ def test_no_motion_no_clips():
     assert w.opened == []
 
 
+def test_on_motion_callback_fires_once_per_event():
+    # Two separate motion events -> on_motion called twice.
+    seq = [False] * 10 + [True] * 5 + [False] * 15 + [True] * 5 + [False] * 10
+    src = FakeSource(len(seq), fps=10.0)
+    det = FakeDetector(seq)
+    w = FakeWriter()
+    motion_frames = []
+    r = MotionRecorder(src, det, w, camera_name="cam", pre_seconds=1.0,
+                       post_seconds=0.5, min_duration=0.4,
+                       on_motion=lambda img, ts: motion_frames.append((img, ts)))
+    r.run()
+    assert len(motion_frames) == 2
+    # Each callback receives the first motion frame and its timestamp.
+    assert all(isinstance(ts, float) for _, ts in motion_frames)
+
+
+def test_no_motion_callback_when_never_moves():
+    seq = [False] * 20
+    src = FakeSource(len(seq), fps=10.0)
+    det = FakeDetector(seq)
+    motion_frames = []
+    r = MotionRecorder(src, det, FakeWriter(), on_motion=lambda img, ts: motion_frames.append(ts))
+    r.run()
+    assert motion_frames == []
+
+
 def test_motion_produces_clip_with_prebuffer():
     # 20 idle frames (2s at 10fps), then 10 motion (0.9s event > min 0.4s),
     # then 10 idle for post-roll.
@@ -72,12 +98,28 @@ def test_on_clip_callback_called():
     saved = []
     r = MotionRecorder(src, det, w, camera_name="cam", pre_seconds=1.0,
                        post_seconds=0.5, min_duration=0.4,
-                       on_clip=lambda p, ts: saved.append((p, ts)))
+                       on_clip=lambda p, ts, score: saved.append((p, ts, score)))
     r.run()
     assert len(saved) == 1
-    path, ts = saved[0]
+    path, ts, score = saved[0]
     assert path.name.startswith("cam_")
     assert ts > 0
+    assert 0 <= score <= 100
+
+
+def test_peak_motion_score_reported():
+    # scores for the 10 motion frames: last is the highest
+    seq = [False] * 10 + [True] * 10 + [False] * 10
+    scores = [0.0] * 10 + [20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 95.0, 42.0] + [0.0] * 10
+    src = FakeSource(len(seq), fps=10.0)
+    det = FakeDetector(seq, scores)
+    saved = []
+    r = MotionRecorder(src, det, FakeWriter(), camera_name="cam", pre_seconds=1.0,
+                       post_seconds=0.5, min_duration=0.4,
+                       on_clip=lambda p, ts, score: saved.append(score))
+    r.run()
+    # peak of the motion scores is 95.0
+    assert saved == [95.0]
 
 
 def test_post_roll_extends_clip():

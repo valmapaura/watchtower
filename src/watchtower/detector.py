@@ -18,11 +18,21 @@ except ImportError:  # pragma: no cover - only needed when running OpenCV detect
 
 
 class MotionDetector(ABC):
-    """Decides whether a frame contains motion."""
+    """Decides whether a frame contains motion.
+
+    ``detect`` returns a bool for simple callers. ``motion_score`` returns a
+    (bool, score) pair where ``score`` is 0-100 intensity, so callers can use
+    the "level of movement" (e.g. to categorize or to gate recording quality).
+    """
 
     @abstractmethod
     def detect(self, frame) -> bool:
         """Return True if the given frame shows motion."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def motion_score(self, frame) -> tuple[bool, float]:
+        """Return (has_motion, score) with score in 0..100."""
         raise NotImplementedError
 
     @abstractmethod
@@ -43,7 +53,7 @@ class FrameDiffDetector(MotionDetector):
         self.threshold = int(threshold)
         self._prev: object | None = None
 
-    def detect(self, frame) -> bool:
+    def _diff_fraction(self, frame) -> float:
         if cv2 is None or np is None:
             raise RuntimeError("OpenCV/numpy are required for FrameDiffDetector")
 
@@ -52,14 +62,24 @@ class FrameDiffDetector(MotionDetector):
 
         if self._prev is None:
             self._prev = gray
-            return False
+            return 0.0
 
         delta = cv2.absdiff(gray, self._prev)
         self._prev = gray
 
         changed = cv2.countNonZero(cv2.threshold(delta, self.threshold, 255, cv2.THRESH_BINARY)[1])
-        fraction = changed / float(gray.size)
-        return fraction > self.sensitivity
+        return changed / float(gray.size)
+
+    def detect(self, frame) -> bool:
+        return self.motion_score(frame)[0]
+
+    def motion_score(self, frame) -> tuple[bool, float]:
+        """Return (has_motion, score). Score maps the changed-pixel fraction
+        to 0-100 via a log-ish scale so small movements are low, big ones high.
+        """
+        fraction = self._diff_fraction(frame)
+        score = min(100.0, fraction / self.sensitivity * 100.0)
+        return (fraction > self.sensitivity, round(score, 1))
 
     def reset(self) -> None:
         self._prev = None

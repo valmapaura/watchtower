@@ -49,7 +49,7 @@ seen, and continues **5‑s after** motion stops. Pure Python + OpenCV, modular.
 
 ```bash
 pip install -e .          # install the package (editable)
-python -m pytest          # run the test suite (25 tests)
+python -m pytest          # run the test suite (35 tests)
 
 # Run continuously against the camera(s) in config.json
 python -m watchtower.main --config config.json
@@ -60,6 +60,23 @@ python -m watchtower.main --config config.json --once
 
 Clips are saved under `recordings/<camera>/<date>/` with a `manifest.json`.
 Tune motion in `config.json` (`sensitivity`, `pre_seconds`, `post_seconds`, `min_duration`).
+
+### Windows desktop notifications (optional)
+
+Get a toast when motion is recorded. In `config.json` set
+`"notifications_enabled": true` (and `pip install winotify`). A notification
+fires at most once a minute to avoid spam.
+
+### Run automatically in the background (Windows)
+
+Uses **Windows Task Scheduler** (built in — no extra software). Records 24/7
+automatically at startup/login:
+
+```powershell
+.\scripts\install-service.ps1               # install + start
+.\scripts\install-service.ps1 -Status       # check status
+.\scripts\install-service.ps1 -Uninstall    # stop + remove
+```
 
 ## 📼 Record a clip
 

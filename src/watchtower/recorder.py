@@ -44,6 +44,7 @@ class Session:
     frames: list[tuple[float, object]]
     motion_start_ts: float
     last_motion_ts: float
+    peak_score: float = 0.0
 
 
 class MotionRecorder:
@@ -66,7 +67,8 @@ class MotionRecorder:
         post_seconds: float = 5.0,
         min_duration: float = 2.0,
         clock: Clock | None = None,
-        on_clip: Callable[[Path, float], None] | None = None,
+        on_clip: Callable[[Path, float, float], None] | None = None,
+        on_motion: Callable[[object, float], None] | None = None,
     ):
         self.source = source
         self.detector = detector
@@ -77,6 +79,7 @@ class MotionRecorder:
         self.min_duration = float(min_duration)
         self.clock = clock or RealClock()
         self.on_clip = on_clip
+        self.on_motion = on_motion
 
         self._pre: list[tuple[float, object]] = []
         self._session: Session | None = None
@@ -110,7 +113,7 @@ class MotionRecorder:
             self._fps = self._fps * 0.9 + (1.0 / (ts - self._last_ts)) * 0.1
         self._last_ts = ts
 
-        motion = bool(self.detector.detect(img))
+        motion, score = self.detector.motion_score(img)
         self._pre.append((ts, img))
         # Trim the pre-buffer down to pre_seconds of frames.
         cutoff = ts - self.pre_seconds
@@ -120,12 +123,16 @@ class MotionRecorder:
         if self._session is None:
             if motion and self._pre:
                 self._start_clip(ts)
+                self._session.peak_score = max(self._session.peak_score, score)
+                if self.on_motion:
+                    self.on_motion(img, ts)
         else:
             self._session.frames.append((ts, img))
             # Write the new frame live to the writer as well.
             self.writer.write(img)
             if motion:
                 self._session.last_motion_ts = ts
+                self._session.peak_score = max(self._session.peak_score, score)
             elif (ts - self._session.last_motion_ts) >= self.post_seconds:
                 self._finalize()
 
@@ -157,5 +164,9 @@ class MotionRecorder:
         if force or event_dur >= self.min_duration:
             self.clips_saved += 1
             if self.on_clip:
-                self.on_clip(self._clip_path(self._session.first_ts), self._session.first_ts)
+                self.on_clip(
+                    self._clip_path(self._session.first_ts),
+                    self._session.first_ts,
+                    self._session.peak_score,
+                )
         self._session = None

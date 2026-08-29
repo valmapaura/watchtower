@@ -2,6 +2,10 @@
   "output_dir": "recordings",
   "retention_days": 30,
   "check_interval": 0.1,
+  "storage_backend": "local",
+  "log_level": "INFO",
+  "timezone": "UTC",
+  "notifications_enabled": false,
   "cameras": [
     {
       "name": "watchtower",
@@ -14,7 +18,8 @@
       "pre_seconds": 30.0,
       "post_seconds": 5.0,
       "min_duration": 2.0,
-      "sensitivity": 0.02
+      "sensitivity": 0.02,
+      "snapshot_on_motion": true
     }
   ]
 }

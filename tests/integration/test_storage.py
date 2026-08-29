@@ -1,6 +1,11 @@
 """Integration tests for the LocalDisk storage backend."""
 from __future__ import annotations
 
+import os
+import tempfile
+import time
+from pathlib import Path
+
 from watchtower.storage import ClipMetadata, LocalDiskBackend
 
 
@@ -47,3 +52,32 @@ def test_delete_removes_clip_and_manifest(tmp_path):
     backend.delete(dest)
     assert not dest.exists()
     assert not manifest.exists()
+
+
+def _save_with_mtime(backend, name, age_days, camera="cam"):
+    """Save a clip and backdate its file mtime by `age_days` days."""
+    clip = Path(tempfile.mkdtemp()) / name
+    clip.write_bytes(b"x")
+    dest = backend.save(clip, ClipMetadata(name, camera, "2026-08-29T12:00:00"))
+    old = time.time() - age_days * 86400
+    os.utime(dest, (old, old))
+    return dest
+
+
+def test_cleanup_removes_old_clips_keeps_new(tmp_path):
+    backend = LocalDiskBackend(tmp_path / "recordings")
+    _save_with_mtime(backend, "old.mp4", age_days=40)
+    _save_with_mtime(backend, "new.mp4", age_days=1)
+    removed = backend.cleanup(retention_days=30, now=time.time())
+    assert removed == 1
+    assert not (tmp_path / "recordings" / "cam" / "2026-08-29" / "old.mp4").exists()
+    assert (tmp_path / "recordings" / "cam" / "2026-08-29" / "new.mp4").exists()
+
+
+def test_cleanup_respects_retention_days_off(tmp_path):
+    backend = LocalDiskBackend(tmp_path / "recordings")
+    _save_with_mtime(backend, "old.mp4", age_days=40)
+    # retention_days=0 means "never delete"
+    removed = backend.cleanup(retention_days=0)
+    assert removed == 0
+    assert len(backend.list()) == 1

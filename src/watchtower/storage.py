@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import time
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -41,6 +42,26 @@ class StorageBackend(ABC):
     @abstractmethod
     def delete(self, path: Path) -> None:
         """Remove a stored clip and its manifest."""
+
+    def cleanup(self, retention_days: int, now: float | None = None) -> int:
+        """Delete clips older than ``retention_days``. Returns count removed.
+
+        Subclasses may override; the default walks ``list()`` and uses each
+        clip's mtime as its age.
+        """
+        if retention_days <= 0:
+            return 0
+        now = now if now is not None else time.time()
+        cutoff = now - retention_days * 86400
+        removed = 0
+        for clip in self.list():
+            try:
+                if clip.stat().st_mtime < cutoff:
+                    self.delete(clip)
+                    removed += 1
+            except FileNotFoundError:
+                continue
+        return removed
 
 
 class LocalDiskBackend(StorageBackend):

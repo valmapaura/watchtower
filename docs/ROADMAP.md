@@ -39,12 +39,22 @@ Goal: a **daemon/service** that records to a local folder, motion‑gated.
 - [x] Motion detection = frame‑diff (OpenCV) behind a `MotionDetector` interface.
 - [x] Clips written to MP4 and saved under `recordings/<camera>/<date>/`.
 - [x] Config: motion sensitivity, pre/post buffer, min duration, per‑camera entries.
-- [x] 25 unit + integration tests passing (see [`docs/TESTING.md`](TESTING.md)).
+- [x] 35 unit + integration tests passing (see [`docs/TESTING.md`](TESTING.md)).
+- [x] Retention policy — auto‑delete clips older than `retention_days` (0 = keep all).
+- [x] Snapshot on motion — JPEG thumbnail per event (`snapshot_on_motion`).
+- [x] Motion score — detector returns an intensity 0‑100, stored in each clip's `manifest.json`.
+- [x] Windows background task — [`scripts/install-service.ps1`](../scripts/install-service.ps1)
+      (Task Scheduler — built into Windows, no third-party software).
+- [x] Windows local notifications — `winotify` toast on motion (`notifications_enabled`).
 
-**Remaining for Phase 1 completion:**
+**Phase 1 is complete** 🎉
 
-- [ ] Run as a background Windows service (Task Scheduler / NSSM / `pywin32`).
-- [ ] Retention policy (auto‑delete clips older than `retention_days`).
+## Suggested fixes / follow-ups (documented)
+
+- **Log rotation** — the scheduled task writes logs to the Task Scheduler history; for
+  verbose app logs, redirect `python -m watchtower.main` output to a file and rotate it.
+- **Motion score as a category** — expose `sensitivity` → threshold, and optionally record
+  at different quality/skip based on the score (low motion = keep low-res).
 
 ## Phase 2 — Storage abstraction
 
@@ -125,6 +135,26 @@ Key idea: **each box is a module with a stable interface.** To add cloud, you ad
 | **Storage usage dashboard**  | How much disk is left, per day      | Low    |
 | **Export/Share**             | Download a clip or batch            | Low    |
 | **Object detection (later)** | Person/car detection (YOLO)         | High   |
+| **Motion detection level**   | Intensity 0‑100 per clip (built)    | Done   |
+
+---
+
+## 🔮 Future: object-type detection & categorized videos
+
+Planned follow‑up (designed for, not yet built):
+
+- **Swap the detector** for an object detector (e.g. YOLO / MediaPipe) implementing the same
+  `MotionDetector` interface. No recorder changes needed — the modular design already allows it.
+- **Categories per clip:** add a `category` field to `ClipMetadata`
+  (e.g. `person`, `car`, `animal`, `unknown`).
+- **Categorised storage:** `recordings/<camera>/<date>/<category>/` so videos are organised
+  automatically by what triggered them.
+- **Confidence/score:** reuse the existing `motion_score` field (or add `confidence`) so the UI
+  can sort/filter by how strong a detection was.
+- **Sensitivity per object:** e.g. only record when a _person_ is seen, ignore a swaying tree.
+
+**Why this is easy now:** the detector, writer, and storage are all behind interfaces. Adding
+object detection is "write a new detector + add one metadata field" — not a rewrite.
 
 ---
 

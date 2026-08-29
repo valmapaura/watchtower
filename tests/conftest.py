@@ -31,19 +31,25 @@ class FakeClock:
 class FakeDetector:
     """Returns a scripted motion response per call."""
 
-    def __init__(self, sequence=None):
+    def __init__(self, sequence=None, scores=None):
         self._seq = list(sequence or [])
+        self._scores = list(scores or [])
         self._i = 0
         self.calls = 0
 
     def detect(self, frame) -> bool:
+        return self.motion_score(frame)[0]
+
+    def motion_score(self, frame) -> tuple[bool, float]:
         self.calls += 1
         if self._i < len(self._seq):
             r = self._seq[self._i]
+            s = self._scores[self._i] if self._i < len(self._scores) else (100.0 if r else 0.0)
         else:
             r = False
+            s = 0.0
         self._i += 1
-        return r
+        return (r, s)
 
     def reset(self):
         self._i = 0

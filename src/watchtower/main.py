@@ -7,10 +7,12 @@ from __future__ import annotations
 
 import argparse
 import signal
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .config import Config
 from .detector import FrameDiffDetector
+from .notifications import NotificationSender
 from .recorder import MotionRecorder
 from .source import RtspFrameSource
 from .storage import ClipMetadata, LocalDiskBackend
@@ -24,12 +26,19 @@ def _parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def run_single_camera(cam, output_dir: Path, once: bool = False) -> int:
+def run_single_camera(
+    cam,
+    output_dir: Path,
+    retention_days: int = 30,
+    once: bool = False,
+    notifications_enabled: bool = False,
+) -> int:
     """Run the recorder for one camera; returns clips saved."""
     source = RtspFrameSource(cam.rtsp_url)
     detector = FrameDiffDetector(sensitivity=cam.sensitivity)
     writer = OpenCvClipWriter()
     backend = LocalDiskBackend(output_dir)
+    notifier = NotificationSender(enabled=notifications_enabled)
 
     recorder = MotionRecorder(
         source=source,
@@ -39,7 +48,8 @@ def run_single_camera(cam, output_dir: Path, once: bool = False) -> int:
         pre_seconds=cam.pre_seconds,
         post_seconds=cam.post_seconds,
         min_duration=cam.min_duration,
-        on_clip=_save_clip(backend, cam),
+        on_clip=_save_clip(backend, cam, notifier),
+        on_motion=_save_snapshot(cam) if cam.snapshot_on_motion else None,
     )
 
     # Stop cleanly on Ctrl-C.
@@ -64,20 +74,42 @@ def run_single_camera(cam, output_dir: Path, once: bool = False) -> int:
     finally:
         source.close()
 
+    # Enforce retention: delete clips older than retention_days.
+    removed = backend.cleanup(retention_days)
+    if removed:
+        print(f"[watchtower] retention: removed {removed} old clip(s)")
+
     return recorder.clips_saved
 
 
-def _save_clip(backend: LocalDiskBackend, cam):
-    def _save(local_path: Path, start_ts: float) -> None:
-        from datetime import datetime, timezone
-
+def _save_clip(backend: LocalDiskBackend, cam, notifier: NotificationSender | None = None):
+    def _save(local_path: Path, start_ts: float, motion_score: float) -> None:
         start_utc = datetime.fromtimestamp(start_ts, tz=timezone.utc).isoformat(timespec="seconds")
         metadata = ClipMetadata(
             filename=local_path.name,
             camera=cam.name,
             start_utc=start_utc,
+            motion_score=motion_score,
         )
         backend.save(local_path, metadata)
+        if notifier is not None:
+            notifier.notify(cam.name, local_path.name, score=motion_score)
+
+    return _save
+
+
+def _save_snapshot(cam):
+    """Return a callback that writes a JPEG thumbnail of a motion frame."""
+    import cv2
+
+    def _save(frame, ts: float) -> None:
+        if frame is None:
+            return
+        ts_str = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
+        out_dir = Path("snapshots") / cam.name
+        out_dir.mkdir(parents=True, exist_ok=True)
+        path = out_dir / f"{ts_str}.jpg"
+        cv2.imwrite(str(path), frame)
 
     return _save
 
@@ -87,7 +119,13 @@ def main() -> int:
     cfg = Config.from_file(args.config)
     for cam in cfg.cameras:
         print(f"[watchtower] watching {cam.name} at {cam.host}")
-        n = run_single_camera(cam, cfg.output_dir, once=args.once)
+        n = run_single_camera(
+            cam,
+            cfg.output_dir,
+            retention_days=cfg.retention_days,
+            once=args.once,
+            notifications_enabled=cfg.notifications_enabled,
+        )
         print(f"[watchtower] {cam.name}: {n} clip(s) recorded")
     return 0
 

@@ -50,3 +50,39 @@ def test_from_file_missing_key(tmp_path):
 
     with pytest.raises(ValueError):
         Config.from_file(p)
+
+
+def test_new_top_level_fields_defaults(tmp_path):
+    data = {"cameras": [{"name": "a", "host": "1.1.1.1", "password": "x"}]}
+    p = tmp_path / "config.json"
+    p.write_text(json.dumps(data), encoding="utf-8")
+    cfg = Config.from_file(p)
+    assert cfg.storage_backend == "local"
+    assert cfg.log_level == "INFO"
+    assert cfg.timezone == "UTC"
+    assert cfg.notifications_enabled is False
+
+
+def test_new_top_level_fields_override(tmp_path):
+    data = {
+        "storage_backend": "google_drive",
+        "log_level": "DEBUG",
+        "timezone": "Africa/Harare",
+        "notifications_enabled": True,
+        "cameras": [{"name": "a", "host": "1.1.1.1", "password": "x"}],
+    }
+    p = tmp_path / "config.json"
+    p.write_text(json.dumps(data), encoding="utf-8")
+    cfg = Config.from_file(p)
+    assert cfg.storage_backend == "google_drive"
+    assert cfg.log_level == "DEBUG"
+    assert cfg.timezone == "Africa/Harare"
+    assert cfg.notifications_enabled is True
+
+
+def test_snapshot_on_motion_default_true(tmp_path):
+    data = {"cameras": [{"name": "a", "host": "1.1.1.1", "password": "x"}]}
+    p = tmp_path / "config.json"
+    p.write_text(json.dumps(data), encoding="utf-8")
+    cfg = Config.from_file(p)
+    assert cfg.cameras[0].snapshot_on_motion is True

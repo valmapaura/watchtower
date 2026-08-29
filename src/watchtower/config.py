@@ -26,6 +26,7 @@ class CameraConfig:
     post_seconds: float = 5.0   # how long to keep AFTER motion stops
     min_duration: float = 2.0   # ignore blips shorter than this
     sensitivity: float = 0.02   # fraction of pixels that must change
+    snapshot_on_motion: bool = True  # save a JPEG thumbnail per motion event
 
     @property
     def rtsp_url(self) -> str:
@@ -45,8 +46,12 @@ class Config:
 
     cameras: list[CameraConfig]
     output_dir: Path = field(default_factory=lambda: Path("recordings"))
-    retention_days: int = 30
-    check_interval: float = 0.1  # seconds between frames processed
+    retention_days: int = 30       # delete clips older than this (0 = never)
+    check_interval: float = 0.1    # seconds between frames processed
+    storage_backend: str = "local" # "local" (future: "google_drive", "firebase", "s3")
+    log_level: str = "INFO"        # DEBUG | INFO | WARNING | ERROR
+    timezone: str = "UTC"          # display timezone for clip timestamps
+    notifications_enabled: bool = False  # future: webhook/email on motion
 
     @classmethod
     def from_file(cls, path: Path | str) -> "Config":
@@ -68,6 +73,10 @@ class Config:
             output_dir=out,
             retention_days=int(raw.get("retention_days", 30)),
             check_interval=float(raw.get("check_interval", 0.1)),
+            storage_backend=raw.get("storage_backend", "local"),
+            log_level=raw.get("log_level", "INFO"),
+            timezone=raw.get("timezone", "UTC"),
+            notifications_enabled=bool(raw.get("notifications_enabled", False)),
         )
 
     @staticmethod
@@ -83,6 +92,7 @@ class Config:
             post_seconds=float(c.get("post_seconds", 5.0)),
             min_duration=float(c.get("min_duration", 2.0)),
             sensitivity=float(c.get("sensitivity", 0.02)),
+            snapshot_on_motion=bool(c.get("snapshot_on_motion", True)),
         )
 
     @classmethod
