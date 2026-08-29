@@ -75,7 +75,7 @@ The `config.json` file contains the camera credentials and connection details. I
     "web_port": 80,
     "rtsp_port": 554,
     "username": "admin",
-    "password": "<REDACTED>",
+    "password": "<YOUR_PASSWORD>",
     "rtsp_path": "/live/ch0"
   }
 }
@@ -118,7 +118,7 @@ ffmpeg -i "<RtspUrl>" -t <Duration> -c:v copy \
 
 ```powershell
 .\Capture-Stream.ps1 \
-   -RtspUrl "rtsp://admin:<REDACTED>@192.168.1.247:554/live/ch0" \
+   -RtspUrl "rtsp://<user>:<password>@192.168.1.247:554/live/ch0" \
    -Duration 60 \
    -OutputDir ".\recordings"
 ```

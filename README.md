@@ -43,7 +43,7 @@ cd "D:\coding projects\cam720"
 Or paste this directly into VLC (Media → Open Network Stream):
 
 ```
-rtsp://admin:<REDACTED>@192.168.1.247:554/live/ch0
+rtsp://<user>:<password>@<ip>:554/live/ch0
 ```
 
 > The camera's SDP advertises `Content-Base: .../ch0/`, but the **DESCRIBE-ready** path is `/live/ch0` (a bare `/ch0/` gets `461 Unsupported Transport`). Use `/live/ch0`.
