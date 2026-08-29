@@ -1,10 +1,10 @@
-# 🗺️ cam720 — Roadmap
+# 🗺️ Watchtower — Roadmap
 
 A phased plan from "captures video to a file" today, to a full home camera‑recording
 service with a browser client. Each phase is **independently useful** and delivers
 something runnable.
 
-> Current status (Phase 0): ✅ capture‑to‑file works, including audio.
+> Current status (Phase 1): ✅ motion recorder built & tested (25 tests passing).
 
 ---
 
@@ -16,9 +16,9 @@ something runnable.
 | Concurrent streams  | ✅ Verified | 4 streams OK (`Camera-Limit-Tester.ps1`) |
 | Live viewer         | ✅ Works    | `src/cam_viewer.py` (OpenCV)             |
 | Health check        | ✅ Works    | `scripts/check-camera.ps1`               |
-| Motion recording    | ❌          | Next big milestone                       |
-| Storage abstraction | ❌          | Planned (local → cloud)                  |
-| Browser UI          | ❌          | Planned (later phase)                    |
+| Motion recording    | ✅ Built    | `src/watchtower/` + 25 tests passing     |
+| Storage abstraction | ✅ Built    | `LocalDiskBackend` + interface           |
+| Browser UI          | ❌          | Planned (Phase 4)                        |
 
 ---
 
@@ -29,29 +29,31 @@ something runnable.
 - [x] Health‑check script.
 - [x] Secure git hygiene (credentials ignored/redacted).
 
-## Phase 1 — Local disk recorder (Windows first) ⭐ next
+## Phase 1 — Local disk recorder (Windows first) ✅ built
 
 Goal: a **daemon/service** that records to a local folder, motion‑gated.
 
-- [ ] `motion_recorder` (Python) that continuously buffers the stream.
-- [ ] **Pre‑buffer 30 s** before motion (circular buffer in RAM, then flushed to disk).
-- [ ] **Post‑roll 5 s** after motion stops (keep recording briefly).
-- [ ] Motion detection = simple frame‑diff / pixel‑change (OpenCV), modular interface.
-- [ ] Segment clips into timestamped files under `recordings/<date>/`.
-- [ ] Retention policy (e.g. keep last N days, auto‑delete old clips).
-- [ ] Run as a background service on Windows (Task Scheduler / NSSM / `pywin32` service).
-- [ ] Config: motion sensitivity, buffer seconds, output dir, per‑camera entries.
+- [x] `motion_recorder` (Python) that continuously buffers the stream. (`src/watchtower/`)
+- [x] **Pre‑buffer 30 s** before motion (time‑based buffer, flushed on motion).
+- [x] **Post‑roll 5 s** after motion stops.
+- [x] Motion detection = frame‑diff (OpenCV) behind a `MotionDetector` interface.
+- [x] Clips written to MP4 and saved under `recordings/<camera>/<date>/`.
+- [x] Config: motion sensitivity, pre/post buffer, min duration, per‑camera entries.
+- [x] 25 unit + integration tests passing (see [`docs/TESTING.md`](TESTING.md)).
 
-**Exit criteria:** leave it running; it writes a handful of motion clips/day, playable in VLC.
+**Remaining for Phase 1 completion:**
+
+- [ ] Run as a background Windows service (Task Scheduler / NSSM / `pywin32`).
+- [ ] Retention policy (auto‑delete clips older than `retention_days`).
 
 ## Phase 2 — Storage abstraction
 
 Goal: decouple "where footage goes" from "how footage is captured".
 
-- [ ] Define a small `StorageBackend` interface:
+- [x] Define a small `StorageBackend` interface:
       `save(clip)`, `list()`, `get(path)`, `delete(path)`.
-- [ ] Implement `LocalDiskBackend` (Windows paths first).
-- [ ] Add `manifest.json` per clip (timestamp, camera, motion score) for future indexing.
+- [x] Implement `LocalDiskBackend` (Windows paths first).
+- [x] Add `manifest.json` per clip (timestamp, camera, motion score) for future indexing.
 - [ ] Design for future backends (Google Drive, Firebase/Cloud Storage, S3, NAS) — no code yet.
 
 ## Phase 3 — Cloud sync (optional add‑on)

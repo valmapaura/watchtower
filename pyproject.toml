@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "watchtower"
+version = "0.1.0"
+description = "Home, open-source camera streaming service — motion recorder"
+requires-python = ">=3.10"
+dependencies = [
+    "opencv-python>=4.5",
+    "numpy>=1.21",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"

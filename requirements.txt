@@ -1,1 +1,5 @@
 opencv-python>=4.5
+numpy>=1.21
+
+# testing
+pytest>=7.0

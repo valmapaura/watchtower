@@ -1,11 +1,20 @@
 {
-  "camera": {
-    "name": "cam720",
-    "host": "192.168.1.100",
-    "web_port": 80,
-    "rtsp_port": 554,
-    "username": "admin",
-    "password": "CHANGE_ME",
-    "rtsp_path": "/live/ch0"
-  }
+  "output_dir": "recordings",
+  "retention_days": 30,
+  "check_interval": 0.1,
+  "cameras": [
+    {
+      "name": "watchtower",
+      "host": "192.168.1.100",
+      "web_port": 80,
+      "rtsp_port": 554,
+      "username": "admin",
+      "password": "CHANGE_ME",
+      "rtsp_path": "/live/ch0",
+      "pre_seconds": 30.0,
+      "post_seconds": 5.0,
+      "min_duration": 2.0,
+      "sensitivity": 0.02
+    }
+  ]
 }

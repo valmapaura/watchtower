@@ -1,4 +1,4 @@
-# 📡 cam720 — Project Vision & Principles
+# � Watchtower — Project Vision & Principles
 
 This is the _why_ and _how_ of the project. It guides every design decision. If a change
 violates these principles, it's probably the wrong change.

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    cam720 - camera health check: ping, open ports, RTSP server status.
+    watchtower - camera health check: ping, open ports, RTSP server status.
 
 .DESCRIPTION
     A quick diagnostic for the APCam WiFi camera. No credentials required.
@@ -25,7 +25,7 @@ if (-not $CameraHost) {
 }
 if (-not $CameraHost) { $CameraHost = "192.168.1.247" }
 
-Write-Host "== cam720 health check: $CameraHost ==" -ForegroundColor Cyan
+Write-Host "== watchtower health check: $CameraHost ==" -ForegroundColor Cyan
 
 # 1. Ping
 $ping = Test-Connection -ComputerName $CameraHost -Count 2 -ErrorAction SilentlyContinue
@@ -59,7 +59,7 @@ try {
     $client.Connect($CameraHost, 554)
     $stream = $client.GetStream()
     $stream.ReadTimeout = 4000
-    $req = "OPTIONS rtsp://${CameraHost}:554/ RTSP/1.0`r`nCSeq: 1`r`nUser-Agent: cam720`r`n`r`n"
+    $req = "OPTIONS rtsp://${CameraHost}:554/ RTSP/1.0`r`nCSeq: 1`r`nUser-Agent: watchtower`r`n`r`n"
     $bytes = [System.Text.Encoding]::ASCII.GetBytes($req)
     $stream.Write($bytes, 0, $bytes.Length)
     $buf = New-Object byte[] 2048

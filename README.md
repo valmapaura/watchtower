@@ -1,15 +1,18 @@
-# 📷 cam720
+# � Watchtower — RTSP camera recorder
 
-> The cameras that showed up on the LAN one day — documented, reverse-engineered, and streamable.
+> An open‑source, self‑hosted motion recorder for any RTSP camera. Watch your feeds,
+> record motion‑gated clips to a drive you own, and stay private by default.
 
-A hobby project capturing **everything** we learned about the WiFi IP cameras on the network: full hardware/firmware specs, the login + RTSP auth internals we reverse-engineered, and a small toolbox to poke them from your PC.
+Built to be **generic**: it talks to any camera that speaks RTSP (H.264/H.265, optional
+audio). This repo's original dev hardware was a generic APCam WiFi camera — see
+[`docs/camera-specs.md`](docs/camera-specs.md) for those notes.
 
-> **🎯 Direction:** growing into a home, open‑source camera streaming service that records
-> footage to a drive you own — local disk first, cloud later, with a browser client.
+> **🎯 Direction:** a home, open‑source camera streaming service that records footage to a
+> drive you own — local disk first, cloud later, with a browser client.
 > See [`docs/PROJECT.md`](docs/PROJECT.md) (vision & principles) and
 > [`docs/ROADMAP.md`](docs/ROADMAP.md) (phased plan).
 
-## 📹 Cameras
+## 📹 Test camera
 
 | Camera     | IP              | MAC vendor    | Platform        | Status                                                                    |
 | ---------- | --------------- | ------------- | --------------- | ------------------------------------------------------------------------- |
@@ -18,7 +21,7 @@ A hobby project capturing **everything** we learned about the WiFi IP cameras on
 ## 🧰 What's inside
 
 ```
-cam720/
+cam720/                  (repo root — rename to watchtower/ if you like)
 ├── README.md                  ← you are here
 ├── config.json                ← your real credentials (git-ignored)
 ├── config.example.json        ← template with placeholders
@@ -28,15 +31,35 @@ cam720/
 ├── docs/
 │   ├── PROJECT.md             ← vision, design principles, modular architecture
 │   ├── ROADMAP.md             ← phased plan: local disk → cloud → browser UI → Android
-│   ├── camera-specs.md        ← cam720 hardware/firmware/network facts
+│   ├── camera-specs.md        ← test-camera hardware/firmware/network facts
 │   └── access-guide.md        ← how to log in, admin panel, RTSP, troubleshooting
 ├── scripts/
 │   ├── check-camera.ps1       ← health check: ping, ports, RTSP server
 │   └── open-in-vlc.ps1        ← opens the live stream in VLC
 └── src/
+    ├── watchtower/            ← the recorder package (detector, recorder, storage)
     ├── cam_viewer.py          ← live RTSP viewer (OpenCV) with snapshots
     └── rtsp_digest_probe.py   ← pure-Python RTSP digest-auth explorer
 ```
+
+## 🎥 Motion recorder (Phase 1)
+
+Records motion‑gated clips: keeps a **30‑s pre‑buffer**, saves a clip when motion is
+seen, and continues **5‑s after** motion stops. Pure Python + OpenCV, modular.
+
+```bash
+pip install -e .          # install the package (editable)
+python -m pytest          # run the test suite (25 tests)
+
+# Run continuously against the camera(s) in config.json
+python -m watchtower.main --config config.json
+
+# Record one short pass and exit (for testing)
+python -m watchtower.main --config config.json --once
+```
+
+Clips are saved under `recordings/<camera>/<date>/` with a `manifest.json`.
+Tune motion in `config.json` (`sensitivity`, `pre_seconds`, `post_seconds`, `min_duration`).
 
 ## 📼 Record a clip
 

@@ -1,4 +1,4 @@
-# 🧪 cam720 — Testing
+# 🧪 Watchtower — Testing
 
 We use **pytest**. Tests are a first‑class part of every phase, not an afterthought.
 

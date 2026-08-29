@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-cam720 - live RTSP viewer for the APCam WiFi camera.
+watchtower - live RTSP viewer for a generic IP camera.
 
 Features:
   * Live H.264 video with on-screen FPS
@@ -45,7 +45,7 @@ def build_rtsp_url(cam: dict) -> str:
 
 def main() -> None:
     default_config = Path(__file__).resolve().parent.parent / "config.json"
-    parser = argparse.ArgumentParser(description="cam720 live RTSP viewer")
+    parser = argparse.ArgumentParser(description="watchtower live RTSP viewer")
     parser.add_argument(
         "--config",
         type=Path,
@@ -62,7 +62,7 @@ def main() -> None:
 
     cam = load_camera(args.config)
     url = build_rtsp_url(cam)
-    print(f"cam720 connecting to {cam['host']} ...")
+    print(f"watchtower connecting to {cam['host']} ...")
 
     cap = cv2.VideoCapture(url)
     if not cap.isOpened():
@@ -74,7 +74,7 @@ def main() -> None:
     snap_dir = Path("snapshots")
     snap_dir.mkdir(exist_ok=True)
 
-    window = "cam720 - [q] quit  [s] snapshot"
+    window = "watchtower - [q] quit  [s] snapshot"
     cv2.namedWindow(window, cv2.WINDOW_NORMAL)
 
     prev = time.time()
@@ -115,7 +115,7 @@ def main() -> None:
             break
         if key == ord("s"):
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-            path = snap_dir / f"cam720_{ts}.png"
+            path = snap_dir / f"watchtower_{ts}.png"
             cv2.imwrite(str(path), frame)
             print(f"snapshot saved: {path}")
 

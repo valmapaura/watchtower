@@ -5,6 +5,10 @@ config.json
 __pycache__/
 *.pyc
 *.pyo
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
 
 # Snapshots from the viewer
 snapshots/

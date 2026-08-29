@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Opens the cam720 RTSP live stream in VLC.
+    Opens the watchtower RTSP live stream in VLC.
 
 .DESCRIPTION
     Reads the stream URL from config.json (username/password/host/path)

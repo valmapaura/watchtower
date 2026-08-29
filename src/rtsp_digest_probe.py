@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-cam720 - pure-Python RTSP digest-auth explorer.
+watchtower - pure-Python RTSP digest-auth explorer.
 
 Talks RTSP directly (no ffmpeg/OpenCV) to demonstrate the exact auth dance
 this camera expects:
@@ -82,14 +82,14 @@ def digest_header(ch: dict, method: str, uri: str, user: str, pw: str) -> str:
 
 def probe(host: str, port: int, path: str, user: str, pw: str) -> None:
     uri = f"rtsp://{host}:{port}{path}"
-    print(f"== cam720 RTSP probe: {uri}")
+    print(f"== watchtower RTSP probe: {uri}")
 
     sock = socket.create_connection((host, port), timeout=8)
     try:
         r1 = send(
             sock,
             f"DESCRIBE {uri} RTSP/1.0\r\n"
-            f"CSeq: 2\r\nUser-Agent: cam720/1.0\r\nAccept: application/sdp\r\n\r\n",
+            f"CSeq: 2\r\nUser-Agent: watchtower/1.0\r\nAccept: application/sdp\r\n\r\n",
         )
         status_line = r1.splitlines()[0] if r1 else "(no response)"
         print(f"\n1) DESCRIBE (no auth) -> {status_line}")
@@ -103,7 +103,7 @@ def probe(host: str, port: int, path: str, user: str, pw: str) -> None:
                 sock,
                 f"DESCRIBE {uri} RTSP/1.0\r\n"
                 f"CSeq: 3\r\nAuthorization: {auth}\r\n"
-                f"User-Agent: cam720/1.0\r\nAccept: application/sdp\r\n\r\n",
+                f"User-Agent: watchtower/1.0\r\nAccept: application/sdp\r\n\r\n",
             )
             status_line2 = r2.splitlines()[0] if r2 else "(no response)"
             print(f"2) DESCRIBE (digest) -> {status_line2}")
@@ -118,7 +118,7 @@ def probe(host: str, port: int, path: str, user: str, pw: str) -> None:
 
 def main() -> None:
     default_config = Path(__file__).resolve().parent.parent / "config.json"
-    parser = argparse.ArgumentParser(description="cam720 RTSP digest probe")
+    parser = argparse.ArgumentParser(description="watchtower RTSP digest probe")
     parser.add_argument("--config", type=Path, default=default_config)
     parser.add_argument("--host", help="override camera host")
     parser.add_argument("--port", type=int, default=554)
