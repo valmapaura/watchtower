@@ -25,6 +25,7 @@ class ClipMetadata:
     motion_score: float = 0.0
     recorded_by: str = "watchtower-motion-recorder"
     source_url: str = ""
+    category: str = "motion"  # "motion" (frame-diff) or an object class (person, car, ...)
 
 class StorageBackend(ABC):
     @abstractmethod
@@ -72,6 +73,10 @@ class LocalDiskBackend(StorageBackend):
 
     def save(self, local_path: Path, metadata: ClipMetadata) -> Path:
         date_dir = self.root / metadata.camera / metadata.start_utc[:10]
+        # Categorised clips live under <camera>/<date>/<category>/ so the UI
+        # can filter by what triggered them. Plain motion stays at the root.
+        if metadata.category and metadata.category != "motion":
+            date_dir = date_dir / metadata.category
         date_dir.mkdir(parents=True, exist_ok=True)
         dest = date_dir / metadata.filename
         shutil.copyfile(local_path, dest)
@@ -107,6 +112,53 @@ class LocalDiskBackend(StorageBackend):
             except (json.JSONDecodeError, TypeError):
                 continue
         return result
+
+    def total_size(self) -> int:
+        """Return the total size of all stored clips in bytes."""
+        return sum(p.stat().st_size for p in self.list())
+
+    def cleanup(
+        self,
+        retention_days: int,
+        now: float | None = None,
+        max_storage_gb: float = 0.0,
+    ) -> int:
+        """Delete clips by age and/or total size. Returns count removed.
+
+        Two independent rules, whichever triggers first:
+          * ``retention_days`` — delete clips older than this (0 = keep all).
+          * ``max_storage_gb`` — delete the oldest clips until the total size
+            of ``recordings/`` is under the cap (0 = unlimited).
+        """
+        removed = 0
+        clips = self.list()
+
+        # Rule 1: age-based retention.
+        if retention_days > 0:
+            now = now if now is not None else time.time()
+            cutoff = now - retention_days * 86400
+            for clip in clips:
+                try:
+                    if clip.stat().st_mtime < cutoff:
+                        self.delete(clip)
+                        removed += 1
+                except FileNotFoundError:
+                    continue
+
+        # Rule 2: size cap — delete oldest first until under the limit.
+        if max_storage_gb > 0:
+            cap_bytes = max_storage_gb * (1024**3)
+            # Re-list so we don't touch clips already removed by retention.
+            for clip in self.list():
+                if self.total_size() <= cap_bytes:
+                    break
+                try:
+                    self.delete(clip)
+                    removed += 1
+                except FileNotFoundError:
+                    continue
+
+        return removed
 
     def delete(self, path: Path) -> None:
         manifest = self.manifest_path(path)

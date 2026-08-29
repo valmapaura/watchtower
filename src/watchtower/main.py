@@ -32,10 +32,11 @@ def run_single_camera(
     retention_days: int = 30,
     once: bool = False,
     notifications_enabled: bool = False,
+    max_storage_gb: float = 20.0,
 ) -> int:
     """Run the recorder for one camera; returns clips saved."""
     source = RtspFrameSource(cam.rtsp_url)
-    detector = FrameDiffDetector(sensitivity=cam.sensitivity)
+    detector = _build_detector(cam)
     writer = OpenCvClipWriter()
     backend = LocalDiskBackend(output_dir)
     notifier = NotificationSender(enabled=notifications_enabled)
@@ -50,6 +51,7 @@ def run_single_camera(
         min_duration=cam.min_duration,
         on_clip=_save_clip(backend, cam, notifier),
         on_motion=_save_snapshot(cam) if cam.snapshot_on_motion else None,
+        category_of=_category_of(detector),
     )
 
     # Stop cleanly on Ctrl-C.
@@ -74,28 +76,61 @@ def run_single_camera(
     finally:
         source.close()
 
-    # Enforce retention: delete clips older than retention_days.
-    removed = backend.cleanup(retention_days)
+    # Enforce retention (age) and the storage size cap.
+    removed = backend.cleanup(retention_days, max_storage_gb=max_storage_gb)
     if removed:
-        print(f"[watchtower] retention: removed {removed} old clip(s)")
+        print(f"[watchtower] cleanup: removed {removed} clip(s)")
 
     return recorder.clips_saved
 
 
 def _save_clip(backend: LocalDiskBackend, cam, notifier: NotificationSender | None = None):
-    def _save(local_path: Path, start_ts: float, motion_score: float) -> None:
+    def _save(local_path: Path, start_ts: float, motion_score: float, category: str = "motion") -> None:
         start_utc = datetime.fromtimestamp(start_ts, tz=timezone.utc).isoformat(timespec="seconds")
         metadata = ClipMetadata(
             filename=local_path.name,
             camera=cam.name,
             start_utc=start_utc,
             motion_score=motion_score,
+            category=category,
         )
         backend.save(local_path, metadata)
         if notifier is not None:
             notifier.notify(cam.name, local_path.name, score=motion_score)
 
     return _save
+
+
+def _build_detector(cam):
+    """Build the motion/object detector for a camera based on its config.
+
+    Uses ``FrameDiffDetector`` by default. If the camera config sets
+    ``detector: "object"`` (and optionally ``detect_categories``), uses the
+    YOLO-based ``ObjectDetector`` instead.
+    """
+    detector_type = getattr(cam, "detector", "motion")
+    if detector_type == "object":
+        from .detector_objects import ObjectDetector
+
+        categories = getattr(cam, "detect_categories", None) or ["person"]
+        return ObjectDetector(categories=categories)
+    return FrameDiffDetector(sensitivity=cam.sensitivity)
+
+
+def _category_of(detector):
+    """Return a callback that reads the current clip category from the detector.
+
+    Object detectors expose ``detected_classes``; frame-diff detectors have no
+    classes, so we fall back to "motion".
+    """
+    def _category() -> str:
+        classes = getattr(detector, "detected_classes", None)
+        if classes:
+            # Pick the most specific class seen (e.g. "person" over "vehicle").
+            return sorted(classes)[0]
+        return "motion"
+
+    return _category
 
 
 def _save_snapshot(cam):
@@ -125,6 +160,7 @@ def main() -> int:
             retention_days=cfg.retention_days,
             once=args.once,
             notifications_enabled=cfg.notifications_enabled,
+            max_storage_gb=cfg.max_storage_gb,
         )
         print(f"[watchtower] {cam.name}: {n} clip(s) recorded")
     return 0

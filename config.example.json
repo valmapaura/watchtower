@@ -1,6 +1,7 @@
 {
   "output_dir": "recordings",
   "retention_days": 30,
+  "max_storage_gb": 20,
   "check_interval": 0.1,
   "storage_backend": "local",
   "log_level": "INFO",
@@ -21,7 +22,9 @@
       "post_seconds": 5.0,
       "min_duration": 2.0,
       "sensitivity": 0.02,
-      "snapshot_on_motion": true
+      "snapshot_on_motion": true,
+      "detector": "motion",
+      "detect_categories": ["person"]
     }
   ]
 }

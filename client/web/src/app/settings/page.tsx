@@ -45,6 +45,7 @@ export default function SettingsPage() {
     try {
       const updated = await api.updateSettings({
         retention_days: settings.retention_days,
+        max_storage_gb: settings.max_storage_gb,
         notifications_enabled: settings.notifications_enabled,
         cameras: settings.cameras,
       });
@@ -61,7 +62,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <Shell>
-        <div className="mx-auto max-w-3xl px-8 py-8">
+        <div className="mx-auto max-w-3xl px-4 py-6 sm:px-8 sm:py-8">
           <div className="h-8 w-40 animate-pulse rounded bg-zinc-900" />
           <div className="mt-6 h-64 animate-pulse rounded-xl bg-zinc-900" />
         </div>
@@ -71,8 +72,8 @@ export default function SettingsPage() {
 
   return (
     <Shell>
-      <div className="mx-auto max-w-3xl px-8 py-8">
-        <header className="mb-8">
+      <div className="mx-auto max-w-3xl px-4 py-6 sm:px-8 sm:py-8">
+        <header className="mb-6 sm:mb-8">
           <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
           <p className="mt-1 text-sm text-zinc-500">
             Motion detection and recording preferences.
@@ -104,6 +105,24 @@ export default function SettingsPage() {
                     }
                     className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-emerald-500"
                   />
+                </Field>
+                <Field label="Max storage (GB)">
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={settings.max_storage_gb}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        max_storage_gb: Number(e.target.value),
+                      })
+                    }
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-emerald-500"
+                  />
+                  <p className="mt-1 text-[11px] text-zinc-600">
+                    0 = unlimited. Oldest clips are deleted when full.
+                  </p>
                 </Field>
                 <Field label="Notifications">
                   <label className="flex cursor-pointer items-center gap-3 pt-2">
@@ -164,6 +183,51 @@ export default function SettingsPage() {
                     minor movement.
                   </p>
                 </div>
+
+                <div className="mt-5">
+                  <label className="text-sm text-zinc-400">Detector</label>
+                  <select
+                    value={cam.detector}
+                    onChange={(e) => updateCamera(i, { detector: e.target.value })}
+                    className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-emerald-500"
+                  >
+                    <option value="motion">Motion (frame diff)</option>
+                    <option value="object">Object detection (YOLO)</option>
+                  </select>
+                  <p className="mt-2 text-xs text-zinc-500">
+                    Object detection can identify people, vehicles, and animals.
+                  </p>
+                </div>
+
+                {cam.detector === "object" && (
+                  <div className="mt-5">
+                    <label className="text-sm text-zinc-400">Detect categories</label>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {["person", "vehicle", "animal", "bicycle"].map((cat) => {
+                        const checked = cam.detect_categories.includes(cat);
+                        return (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() => {
+                              const next = checked
+                                ? cam.detect_categories.filter((c) => c !== cat)
+                                : [...cam.detect_categories, cat];
+                              updateCamera(i, { detect_categories: next });
+                            }}
+                            className={`rounded-full border px-3 py-1 text-xs capitalize transition-colors ${
+                              checked
+                                ? "border-emerald-500 bg-emerald-500/15 text-emerald-300"
+                                : "border-zinc-700 text-zinc-400 hover:bg-zinc-800"
+                            }`}
+                          >
+                            {cat}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <Field label="Pre-roll (s)">

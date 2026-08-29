@@ -61,6 +61,18 @@ def test_new_top_level_fields_defaults(tmp_path):
     assert cfg.log_level == "INFO"
     assert cfg.timezone == "UTC"
     assert cfg.notifications_enabled is False
+    assert cfg.max_storage_gb == 20.0
+
+
+def test_max_storage_gb_override(tmp_path):
+    data = {
+        "max_storage_gb": 50,
+        "cameras": [{"name": "a", "host": "1.1.1.1", "password": "x"}],
+    }
+    p = tmp_path / "config.json"
+    p.write_text(json.dumps(data), encoding="utf-8")
+    cfg = Config.from_file(p)
+    assert cfg.max_storage_gb == 50.0
 
 
 def test_new_top_level_fields_override(tmp_path):

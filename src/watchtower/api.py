@@ -17,11 +17,12 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 from .config import Config
+from .live import LiveStream
 from .storage import LocalDiskBackend
 
 _bearer = HTTPBearer(auto_error=False)
@@ -50,6 +51,8 @@ class CameraSettings(BaseModel):
     min_duration: float = 2.0
     sensitivity: float = 0.02
     snapshot_on_motion: bool = True
+    detector: str = "motion"
+    detect_categories: list[str] = ["person"]
 
 
 class SettingsUpdate(BaseModel):
@@ -57,16 +60,27 @@ class SettingsUpdate(BaseModel):
 
     cameras: list[CameraSettings] | None = None
     retention_days: int | None = None
+    max_storage_gb: float | None = None
     notifications_enabled: bool | None = None
 
 
-def create_app(config: Config, config_path: Path | None = None) -> FastAPI:
+def create_app(
+    config: Config,
+    config_path: Path | None = None,
+    live_stream_factory=None,
+) -> FastAPI:
     """Build the FastAPI app bound to the given config.
 
     ``config_path`` is the config.json file to persist settings changes to.
     If omitted, settings writes are rejected (read-only mode).
+
+    ``live_stream_factory`` is an optional callable ``(CameraConfig) -> LiveStream``
+    used to build the live stream for a camera. Tests inject a fake here so they
+    don't need a real RTSP camera.
     """
     backend = LocalDiskBackend(config.output_dir)
+    if live_stream_factory is None:
+        live_stream_factory = LiveStream
 
     app = FastAPI(title="watchtower", version="0.1.0")
 
@@ -88,6 +102,26 @@ def create_app(config: Config, config_path: Path | None = None) -> FastAPI:
     @app.get("/health")
     def health() -> dict:
         return {"status": "ok"}
+
+    @app.get("/live", dependencies=[Depends(auth)])
+    def list_live_cameras() -> list[dict]:
+        """Return cameras available for live viewing (no credentials)."""
+        return [
+            {"name": c.name, "host": c.host, "rtsp_path": c.rtsp_path}
+            for c in config.cameras
+        ]
+
+    @app.get("/live/{camera_name}/stream", dependencies=[Depends(auth)])
+    def live_stream(camera_name: str) -> StreamingResponse:
+        """Serve a camera's live feed as an MJPEG stream (browser-playable)."""
+        cam = next((c for c in config.cameras if c.name == camera_name), None)
+        if cam is None:
+            raise HTTPException(status_code=404, detail="Camera not found")
+        stream = live_stream_factory(cam)
+        return StreamingResponse(
+            _mjpeg_generator(stream),
+            media_type="multipart/x-mixed-replace; boundary=frame",
+        )
 
     @app.get("/clips", dependencies=[Depends(auth)])
     def list_clips() -> list[dict]:
@@ -118,6 +152,7 @@ def create_app(config: Config, config_path: Path | None = None) -> FastAPI:
         """Return editable settings. Passwords are never exposed."""
         return {
             "retention_days": config.retention_days,
+            "max_storage_gb": config.max_storage_gb,
             "notifications_enabled": config.notifications_enabled,
             "cameras": [
                 {
@@ -130,6 +165,8 @@ def create_app(config: Config, config_path: Path | None = None) -> FastAPI:
                     "min_duration": c.min_duration,
                     "sensitivity": c.sensitivity,
                     "snapshot_on_motion": c.snapshot_on_motion,
+                    "detector": c.detector,
+                    "detect_categories": c.detect_categories,
                 }
                 for c in config.cameras
             ],
@@ -146,6 +183,9 @@ def create_app(config: Config, config_path: Path | None = None) -> FastAPI:
         if update.retention_days is not None:
             raw["retention_days"] = update.retention_days
             config.retention_days = update.retention_days
+        if update.max_storage_gb is not None:
+            raw["max_storage_gb"] = update.max_storage_gb
+            config.max_storage_gb = update.max_storage_gb
         if update.notifications_enabled is not None:
             raw["notifications_enabled"] = update.notifications_enabled
             config.notifications_enabled = update.notifications_enabled
@@ -166,6 +206,8 @@ def create_app(config: Config, config_path: Path | None = None) -> FastAPI:
                     "min_duration": cam.min_duration,
                     "sensitivity": cam.sensitivity,
                     "snapshot_on_motion": cam.snapshot_on_motion,
+                    "detector": cam.detector,
+                    "detect_categories": cam.detect_categories,
                 }
                 if existing is not None:
                     # Preserve the stored password and username.
@@ -198,6 +240,18 @@ def _resolve_clip(backend: LocalDiskBackend, clip_id: str) -> Path:
         if path.name == name:
             return path
     raise HTTPException(status_code=404, detail="Clip not found")
+
+
+def _mjpeg_generator(stream: LiveStream):
+    """Yield MJPEG multipart chunks from a live camera stream."""
+    try:
+        for frame in stream.frames():
+            yield (
+                b"--frame\r\n"
+                b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
+            )
+    finally:
+        stream.close()
 
 
 def main() -> None:

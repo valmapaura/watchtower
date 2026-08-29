@@ -20,7 +20,7 @@ def _make_config(tmp_path, api_token: str = "") -> Config:
     )
 
 
-def _seed_clip(tmp_path, name: str = "cam_20260829_120000Z.mp4") -> Path:
+def _seed_clip(tmp_path, name: str = "cam_20260829_120000Z.mp4", category: str = "motion") -> Path:
     backend = LocalDiskBackend(tmp_path / "recordings")
     src = tmp_path / name
     src.write_bytes(b"fake-video-bytes")
@@ -29,6 +29,7 @@ def _seed_clip(tmp_path, name: str = "cam_20260829_120000Z.mp4") -> Path:
         camera="cam",
         start_utc="2026-08-29T12:00:00",
         motion_score=42.0,
+        category=category,
     )
     return backend.save(src, meta)
 
@@ -48,6 +49,14 @@ def test_list_clips_returns_metadata(tmp_path):
     assert clips[0]["filename"] == "cam_20260829_120000Z.mp4"
     assert clips[0]["camera"] == "cam"
     assert clips[0]["motion_score"] == 42.0
+    assert clips[0]["category"] == "motion"
+
+
+def test_list_clips_includes_category(tmp_path):
+    _seed_clip(tmp_path, category="person")
+    client = TestClient(create_app(_make_config(tmp_path)))
+    clips = client.get("/clips").json()
+    assert clips[0]["category"] == "person"
 
 
 def test_stream_clip_serves_file(tmp_path):
@@ -167,8 +176,71 @@ def test_update_retention(tmp_path):
     assert json.loads(cfg_path.read_text(encoding="utf-8"))["retention_days"] == 7
 
 
+def test_update_max_storage_gb(tmp_path):
+    cfg_path = _write_config(tmp_path)
+    cfg = Config.from_file(cfg_path)
+    client = TestClient(create_app(cfg, config_path=cfg_path))
+    resp = client.put("/settings", json={"max_storage_gb": 50})
+    assert resp.status_code == 200
+    assert resp.json()["max_storage_gb"] == 50
+    assert json.loads(cfg_path.read_text(encoding="utf-8"))["max_storage_gb"] == 50
+
+
 def test_update_settings_rejected_without_config_path(tmp_path):
     cfg = _make_config(tmp_path)
     client = TestClient(create_app(cfg, config_path=None))
     resp = client.put("/settings", json={"retention_days": 7})
     assert resp.status_code == 400
+
+
+# --- live ----------------------------------------------------------------
+
+
+def _make_config_with_camera(tmp_path, name="cam") -> Config:
+    from watchtower.config import CameraConfig
+
+    return Config(
+        cameras=[CameraConfig(name=name, host="192.168.1.247")],
+        output_dir=tmp_path / "recordings",
+    )
+
+
+def test_list_live_cameras(tmp_path):
+    client = TestClient(create_app(_make_config_with_camera(tmp_path)))
+    resp = client.get("/live")
+    assert resp.status_code == 200
+    cams = resp.json()
+    assert len(cams) == 1
+    assert cams[0]["name"] == "cam"
+    # No credentials exposed.
+    assert "password" not in cams[0]
+    assert "username" not in cams[0]
+
+
+def test_live_stream_unknown_camera_404(tmp_path):
+    client = TestClient(create_app(_make_config_with_camera(tmp_path)))
+    resp = client.get("/live/nope/stream")
+    assert resp.status_code == 404
+
+
+def test_live_stream_returns_mjpeg_media_type(tmp_path):
+    class FakeStream:
+        def __init__(self, cam):
+            self.cam = cam
+
+        def frames(self):
+            yield b"\xff\xd8\xff\xe0fakejpeg"
+            return
+
+        def close(self):
+            pass
+
+    client = TestClient(
+        create_app(_make_config_with_camera(tmp_path), live_stream_factory=FakeStream)
+    )
+    resp = client.get("/live/cam/stream")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("multipart/x-mixed-replace")
+    # The body should contain the MJPEG frame boundary + JPEG bytes.
+    assert b"--frame" in resp.content
+    assert b"fakejpeg" in resp.content

@@ -9,9 +9,19 @@ rebuilt without touching the recorder.
 
 ## Views
 
-- **Timeline** (`/`) — grid of recorded clips with play, download, and delete.
-- **Settings** (`/settings`) — motion sensitivity, pre/post-roll, retention,
-  notifications, snapshot toggle.
+- **Timeline** (`/`) — grid of recorded clips with play, download, delete, and
+  category filter.
+- **Live** (`/live`) — watch cameras in real time (MJPEG stream, browser-playable).
+- **Settings** (`/settings`) — motion sensitivity, detector + categories,
+  pre/post-roll, retention, notifications, snapshot toggle.
+
+## Responsive
+
+The UI is fully responsive:
+
+- **Desktop** — fixed sidebar with vertical navigation.
+- **Mobile / tablet** — the sidebar collapses to a top bar with horizontal,
+  scrollable navigation; grids and headers stack vertically.
 
 ## Run it
 
@@ -41,9 +51,10 @@ src/
 ├── app/
 │   ├── layout.tsx        # root layout (dark theme)
 │   ├── page.tsx          # Timeline view
+│   ├── live/page.tsx     # Live view (MJPEG)
 │   └── settings/page.tsx # Settings view
 ├── components/
-│   └── Shell.tsx         # sidebar navigation shell
+│   └── Shell.tsx         # responsive sidebar/top-bar navigation shell
 └── lib/
     ├── api.ts            # API client (only place that talks to the backend)
     └── format.ts         # date/duration/motion helpers

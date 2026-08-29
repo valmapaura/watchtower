@@ -49,7 +49,7 @@ seen, and continues **5‑s after** motion stops. Pure Python + OpenCV, modular.
 
 ```bash
 pip install -e .          # install the package (editable)
-python -m pytest          # run the test suite (47 tests)
+python -m pytest          # run the test suite (60 tests)
 
 # Run continuously against the camera(s) in config.json
 python -m watchtower.main --config config.json
@@ -60,6 +60,45 @@ python -m watchtower.main --config config.json --once
 
 Clips are saved under `recordings/<camera>/<date>/` with a `manifest.json`.
 Tune motion in `config.json` (`sensitivity`, `pre_seconds`, `post_seconds`, `min_duration`).
+
+## 💾 Storage limits
+
+Two independent rules keep disk usage in check (whichever triggers first):
+
+- **`retention_days`** (default 30) — delete clips older than this. `0` = keep all.
+- **`max_storage_gb`** (default 20) — delete the **oldest** clips until the total
+  size of `recordings/` is under the cap. `0` = unlimited.
+
+Both are adjustable in `config.json` or the Settings UI.
+
+```json
+{
+  "retention_days": 30,
+  "max_storage_gb": 20
+}
+```
+
+## 🧠 Object detection (categorised clips)
+
+By default the recorder uses **frame differencing** (motion = pixel change). You can
+switch a camera to **object detection** (YOLO) to identify _what_ moved — people,
+vehicles, animals — and store clips under a category folder:
+
+```json
+{
+  "cameras": [
+    {
+      "name": "watchtower",
+      "detector": "object",
+      "detect_categories": ["person", "vehicle", "animal"]
+    }
+  ]
+}
+```
+
+- Requires `pip install ultralytics` (opt-in per camera; more CPU/GPU-hungry).
+- Categorised clips save to `recordings/<camera>/<date>/<category>/`.
+- The web UI's Timeline filters by category; Settings picks the detector + categories.
 
 ## 🌐 Web API (Phase 4 prep)
 
@@ -78,6 +117,8 @@ python -m watchtower.api --config config.json --host 0.0.0.0   # expose on LAN
 | `GET /clips/{id}/stream`   | Stream the MP4 (HTTP range → seeking works)         |
 | `GET /clips/{id}/download` | Download the clip as an attachment                  |
 | `DELETE /clips/{id}`       | Delete a clip + its manifest                        |
+| `GET /live`                | List cameras available for live viewing             |
+| `GET /live/{name}/stream`  | Live MJPEG stream (browser-playable via `<img>`)    |
 
 **Auth:** set `"api_token"` in `config.json` to require a bearer token on every
 request. Leave it empty (`""`) for an open API — fine when bound to localhost only.

@@ -98,7 +98,7 @@ def test_on_clip_callback_called():
     saved = []
     r = MotionRecorder(src, det, w, camera_name="cam", pre_seconds=1.0,
                        post_seconds=0.5, min_duration=0.4,
-                       on_clip=lambda p, ts, score: saved.append((p, ts, score)))
+                       on_clip=lambda p, ts, score, cat: saved.append((p, ts, score)))
     r.run()
     assert len(saved) == 1
     path, ts, score = saved[0]
@@ -116,7 +116,7 @@ def test_peak_motion_score_reported():
     saved = []
     r = MotionRecorder(src, det, FakeWriter(), camera_name="cam", pre_seconds=1.0,
                        post_seconds=0.5, min_duration=0.4,
-                       on_clip=lambda p, ts, score: saved.append(score))
+                       on_clip=lambda p, ts, score, cat: saved.append(score))
     r.run()
     # peak of the motion scores is 95.0
     assert saved == [95.0]
@@ -138,3 +138,28 @@ def test_step_returns_false_at_end():
     r = MotionRecorder(src, det, FakeWriter())
     assert r.step() is True
     assert r.step() is False
+
+
+def test_category_of_callback_tags_clip():
+    seq = [False] * 10 + [True] * 10 + [False] * 10
+    src = FakeSource(len(seq), fps=10.0)
+    det = FakeDetector(seq)
+    saved = []
+    r = MotionRecorder(src, det, FakeWriter(), camera_name="cam", pre_seconds=1.0,
+                       post_seconds=0.5, min_duration=0.4,
+                       category_of=lambda: "person",
+                       on_clip=lambda p, ts, score, cat: saved.append(cat))
+    r.run()
+    assert saved == ["person"]
+
+
+def test_category_defaults_to_motion():
+    seq = [False] * 10 + [True] * 10 + [False] * 10
+    src = FakeSource(len(seq), fps=10.0)
+    det = FakeDetector(seq)
+    saved = []
+    r = MotionRecorder(src, det, FakeWriter(), camera_name="cam", pre_seconds=1.0,
+                       post_seconds=0.5, min_duration=0.4,
+                       on_clip=lambda p, ts, score, cat: saved.append(cat))
+    r.run()
+    assert saved == ["motion"]

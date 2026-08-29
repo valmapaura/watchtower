@@ -4,7 +4,7 @@ A phased plan from "captures video to a file" today, to a full home camera‑rec
 service with a browser client. Each phase is **independently useful** and delivers
 something runnable.
 
-> Current status (Phase 1): ✅ motion recorder built & tested (25 tests passing).
+> Current status: ✅ motion recorder + web UI built & tested (60 tests passing).
 
 ---
 
@@ -16,9 +16,10 @@ something runnable.
 | Concurrent streams  | ✅ Verified | 4 streams OK (`Camera-Limit-Tester.ps1`) |
 | Live viewer         | ✅ Works    | `src/cam_viewer.py` (OpenCV)             |
 | Health check        | ✅ Works    | `scripts/check-camera.ps1`               |
-| Motion recording    | ✅ Built    | `src/watchtower/` + 25 tests passing     |
+| Motion recording    | ✅ Built    | `src/watchtower/` + 60 tests passing     |
 | Storage abstraction | ✅ Built    | `LocalDiskBackend` + interface           |
-| Browser UI          | ❌          | Planned (Phase 4)                        |
+| Object detection    | ✅ Built    | `ObjectDetector` (YOLO) behind interface |
+| Browser UI          | ✅ Built    | Next.js app in `client/web/`             |
 
 ---
 
@@ -144,22 +145,29 @@ Key idea: **each box is a module with a stable interface.** To add cloud, you ad
 
 ---
 
-## 🔮 Future: object-type detection & categorized videos
+## 🔮 Object-type detection & categorized videos
 
-Planned follow‑up (designed for, not yet built):
+**Built** ✅ — the modular design paid off:
 
-- **Swap the detector** for an object detector (e.g. YOLO / MediaPipe) implementing the same
-  `MotionDetector` interface. No recorder changes needed — the modular design already allows it.
-- **Categories per clip:** add a `category` field to `ClipMetadata`
-  (e.g. `person`, `car`, `animal`, `unknown`).
-- **Categorised storage:** `recordings/<camera>/<date>/<category>/` so videos are organised
-  automatically by what triggered them.
-- **Confidence/score:** reuse the existing `motion_score` field (or add `confidence`) so the UI
-  can sort/filter by how strong a detection was.
-- **Sensitivity per object:** e.g. only record when a _person_ is seen, ignore a swaying tree.
+- **`ObjectDetector`** (YOLO via `ultralytics`) implements the same `MotionDetector`
+  interface as `FrameDiffDetector`. Swap it per-camera in config:
+  `"detector": "object"` + `"detect_categories": ["person", "vehicle", ...]`.
+- **`category` field** added to `ClipMetadata` (defaults to `"motion"`).
+- **Categorised storage:** `recordings/<camera>/<date>/<category>/`.
+- **UI filter:** the Timeline view filters clips by category; Settings lets you
+  pick the detector and which categories to record.
+- **Confidence/score:** the existing `motion_score` carries the peak detection
+  confidence (0-100).
 
-**Why this is easy now:** the detector, writer, and storage are all behind interfaces. Adding
-object detection is "write a new detector + add one metadata field" — not a rewrite.
+**Remaining / future:**
+
+- **Sensitivity per object:** e.g. only record when a _person_ is seen, ignore a
+  swaying tree (config-driven, not yet built).
+- **More categories / custom models:** the `CATEGORY_CLASS_IDS` map in
+  `detector_objects.py` is easy to extend.
+
+> Note: object detection needs `pip install ultralytics` and is far more
+> CPU/GPU-hungry than frame differencing. It's opt-in per camera.
 
 ---
 

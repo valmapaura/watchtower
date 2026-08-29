@@ -45,6 +45,7 @@ class Session:
     motion_start_ts: float
     last_motion_ts: float
     peak_score: float = 0.0
+    category: str = "motion"
 
 
 class MotionRecorder:
@@ -69,6 +70,7 @@ class MotionRecorder:
         clock: Clock | None = None,
         on_clip: Callable[[Path, float, float], None] | None = None,
         on_motion: Callable[[object, float], None] | None = None,
+        category_of: Callable[[], str] | None = None,
     ):
         self.source = source
         self.detector = detector
@@ -80,6 +82,9 @@ class MotionRecorder:
         self.clock = clock or RealClock()
         self.on_clip = on_clip
         self.on_motion = on_motion
+        # Optional callback that returns the category for the current clip
+        # (e.g. reads detector.detected_classes). Defaults to "motion".
+        self.category_of = category_of or (lambda: "motion")
 
         self._pre: list[tuple[float, object]] = []
         self._session: Session | None = None
@@ -124,6 +129,7 @@ class MotionRecorder:
             if motion and self._pre:
                 self._start_clip(ts)
                 self._session.peak_score = max(self._session.peak_score, score)
+                self._session.category = self.category_of()
                 if self.on_motion:
                     self.on_motion(img, ts)
         else:
@@ -168,5 +174,6 @@ class MotionRecorder:
                     self._clip_path(self._session.first_ts),
                     self._session.first_ts,
                     self._session.peak_score,
+                    self._session.category,
                 )
         self._session = None

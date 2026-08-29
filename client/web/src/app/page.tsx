@@ -11,6 +11,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [category, setCategory] = useState<string>("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -30,6 +31,10 @@ export default function Home() {
     };
   }, [reloadKey]);
 
+  const categories = Array.from(new Set(clips.map((c) => c.category))).sort();
+  const filtered =
+    category === "all" ? clips : clips.filter((c) => c.category === category);
+
   const handleDelete = async (clip: Clip) => {
     if (!confirm(`Delete clip from ${clip.camera}?`)) return;
     try {
@@ -42,20 +47,34 @@ export default function Home() {
 
   return (
     <Shell>
-      <div className="mx-auto max-w-6xl px-8 py-8">
-        <header className="mb-8 flex items-end justify-between">
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-8 sm:py-8">
+        <header className="mb-6 flex flex-col gap-3 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Timeline</h1>
             <p className="mt-1 text-sm text-zinc-500">
-              {clips.length} recorded clip{clips.length === 1 ? "" : "s"}
+              {filtered.length} recorded clip{filtered.length === 1 ? "" : "s"}
             </p>
           </div>
-          <button
-            onClick={() => setReloadKey((k) => k + 1)}
-            className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition-colors hover:bg-zinc-800"
-          >
-            Refresh
-          </button>
+          <div className="flex items-center gap-3">
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 outline-none focus:border-emerald-500"
+            >
+              <option value="all">All categories</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => setReloadKey((k) => k + 1)}
+              className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition-colors hover:bg-zinc-800"
+            >
+              Refresh
+            </button>
+          </div>
         </header>
 
         {error && (
@@ -70,17 +89,19 @@ export default function Home() {
               <div key={i} className="h-48 animate-pulse rounded-xl bg-zinc-900" />
             ))}
           </div>
-        ) : clips.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-800 py-24 text-center">
             <div className="text-4xl">🎥</div>
-            <p className="mt-4 text-sm text-zinc-400">No clips recorded yet</p>
+            <p className="mt-4 text-sm text-zinc-400">
+              {category === "all" ? "No clips recorded yet" : `No ${category} clips`}
+            </p>
             <p className="mt-1 text-xs text-zinc-600">
               Motion-triggered recordings will appear here.
             </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {clips.map((clip) => (
+            {filtered.map((clip) => (
               <ClipCard
                 key={clip.filename}
                 clip={clip}
@@ -135,7 +156,10 @@ function ClipCard({
       <div className="p-4">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-zinc-200">{clip.camera}</span>
-          <MotionBadge score={clip.motion_score} />
+          <div className="flex items-center gap-2">
+            <CategoryBadge category={clip.category} />
+            <MotionBadge score={clip.motion_score} />
+          </div>
         </div>
         <div className="mt-1 text-xs text-zinc-500">{formatDate(clip.start_utc)}</div>
         <div className="mt-3 flex items-center justify-between text-xs">
@@ -172,6 +196,22 @@ function MotionBadge({ score }: { score: number }) {
   return (
     <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${color}`}>
       {label}
+    </span>
+  );
+}
+
+function CategoryBadge({ category }: { category: string }) {
+  const color =
+    category === "person"
+      ? "bg-sky-500/15 text-sky-400"
+      : category === "vehicle"
+        ? "bg-orange-500/15 text-orange-400"
+        : category === "animal"
+          ? "bg-emerald-500/15 text-emerald-400"
+          : "bg-zinc-700/40 text-zinc-400";
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ${color}`}>
+      {category}
     </span>
   );
 }

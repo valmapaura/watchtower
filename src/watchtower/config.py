@@ -27,6 +27,8 @@ class CameraConfig:
     min_duration: float = 2.0   # ignore blips shorter than this
     sensitivity: float = 0.02   # fraction of pixels that must change
     snapshot_on_motion: bool = True  # save a JPEG thumbnail per motion event
+    detector: str = "motion"    # "motion" (frame-diff) or "object" (YOLO)
+    detect_categories: list[str] = field(default_factory=lambda: ["person"])  # object classes to record
 
     @property
     def rtsp_url(self) -> str:
@@ -47,6 +49,7 @@ class Config:
     cameras: list[CameraConfig]
     output_dir: Path = field(default_factory=lambda: Path("recordings"))
     retention_days: int = 30       # delete clips older than this (0 = never)
+    max_storage_gb: float = 20.0   # max recordings size in GB (0 = unlimited)
     check_interval: float = 0.1    # seconds between frames processed
     storage_backend: str = "local" # "local" (future: "google_drive", "firebase", "s3")
     log_level: str = "INFO"        # DEBUG | INFO | WARNING | ERROR
@@ -74,6 +77,7 @@ class Config:
             cameras=cameras,
             output_dir=out,
             retention_days=int(raw.get("retention_days", 30)),
+            max_storage_gb=float(raw.get("max_storage_gb", 20.0)),
             check_interval=float(raw.get("check_interval", 0.1)),
             storage_backend=raw.get("storage_backend", "local"),
             log_level=raw.get("log_level", "INFO"),
@@ -97,6 +101,8 @@ class Config:
             min_duration=float(c.get("min_duration", 2.0)),
             sensitivity=float(c.get("sensitivity", 0.02)),
             snapshot_on_motion=bool(c.get("snapshot_on_motion", True)),
+            detector=c.get("detector", "motion"),
+            detect_categories=list(c.get("detect_categories", ["person"])),
         )
 
     @classmethod
