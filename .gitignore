@@ -9,6 +9,20 @@ __pycache__/
 # Snapshots from the viewer
 snapshots/
 
+# Video recordings (large binaries)
+recordings/
+*.mp4
+*.mkv
+*.avi
+*.mov
+*.ts
+
+# Local logs
+logs/
+
+# Vendor client installer (large binary)
+client/
+
 # Editor
 .vscode/
 .idea/
