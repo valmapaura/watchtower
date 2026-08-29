@@ -12,11 +12,14 @@ Security model (matches the project's "private by default" principle):
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel
 
 from .config import Config
 from .storage import LocalDiskBackend
@@ -35,11 +38,47 @@ def _require_token(
         raise HTTPException(status_code=401, detail="Invalid or missing API token")
 
 
-def create_app(config: Config) -> FastAPI:
-    """Build the FastAPI app bound to the given config."""
+class CameraSettings(BaseModel):
+    """Editable camera settings. Passwords are intentionally NOT included."""
+
+    name: str
+    host: str
+    rtsp_port: int = 554
+    rtsp_path: str = "/live/ch0"
+    pre_seconds: float = 30.0
+    post_seconds: float = 5.0
+    min_duration: float = 2.0
+    sensitivity: float = 0.02
+    snapshot_on_motion: bool = True
+
+
+class SettingsUpdate(BaseModel):
+    """Fields the UI is allowed to change."""
+
+    cameras: list[CameraSettings] | None = None
+    retention_days: int | None = None
+    notifications_enabled: bool | None = None
+
+
+def create_app(config: Config, config_path: Path | None = None) -> FastAPI:
+    """Build the FastAPI app bound to the given config.
+
+    ``config_path`` is the config.json file to persist settings changes to.
+    If omitted, settings writes are rejected (read-only mode).
+    """
     backend = LocalDiskBackend(config.output_dir)
 
     app = FastAPI(title="watchtower", version="0.1.0")
+
+    # Allow the browser UI (Next.js dev server on :3000, or any origin) to call
+    # this API. The API is protected by the optional bearer token, so opening
+    # CORS to all origins is acceptable for a local-first tool.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     def auth(
         credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
@@ -73,6 +112,73 @@ def create_app(config: Config) -> FastAPI:
         path = _resolve_clip(backend, clip_id)
         backend.delete(path)
         return {"deleted": clip_id}
+
+    @app.get("/settings", dependencies=[Depends(auth)])
+    def get_settings() -> dict:
+        """Return editable settings. Passwords are never exposed."""
+        return {
+            "retention_days": config.retention_days,
+            "notifications_enabled": config.notifications_enabled,
+            "cameras": [
+                {
+                    "name": c.name,
+                    "host": c.host,
+                    "rtsp_port": c.rtsp_port,
+                    "rtsp_path": c.rtsp_path,
+                    "pre_seconds": c.pre_seconds,
+                    "post_seconds": c.post_seconds,
+                    "min_duration": c.min_duration,
+                    "sensitivity": c.sensitivity,
+                    "snapshot_on_motion": c.snapshot_on_motion,
+                }
+                for c in config.cameras
+            ],
+        }
+
+    @app.put("/settings", dependencies=[Depends(auth)])
+    def update_settings(update: SettingsUpdate) -> dict:
+        """Persist editable settings to config.json (passwords untouched)."""
+        if config_path is None:
+            raise HTTPException(status_code=400, detail="Settings persistence is disabled")
+
+        raw = json.loads(config_path.read_text(encoding="utf-8"))
+
+        if update.retention_days is not None:
+            raw["retention_days"] = update.retention_days
+            config.retention_days = update.retention_days
+        if update.notifications_enabled is not None:
+            raw["notifications_enabled"] = update.notifications_enabled
+            config.notifications_enabled = update.notifications_enabled
+
+        if update.cameras is not None:
+            # Merge by name so we never clobber passwords that live in config.json.
+            by_name = {c.name: c for c in config.cameras}
+            new_cameras = []
+            for cam in update.cameras:
+                existing = by_name.get(cam.name)
+                entry = {
+                    "name": cam.name,
+                    "host": cam.host,
+                    "rtsp_port": cam.rtsp_port,
+                    "rtsp_path": cam.rtsp_path,
+                    "pre_seconds": cam.pre_seconds,
+                    "post_seconds": cam.post_seconds,
+                    "min_duration": cam.min_duration,
+                    "sensitivity": cam.sensitivity,
+                    "snapshot_on_motion": cam.snapshot_on_motion,
+                }
+                if existing is not None:
+                    # Preserve the stored password and username.
+                    entry["username"] = existing.username
+                    entry["password"] = existing.password
+                new_cameras.append(entry)
+            raw["cameras"] = new_cameras
+            config.cameras = [
+                Config._parse_camera(c) for c in new_cameras
+            ]
+
+        config_path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+        return get_settings()
 
     return app
 
@@ -108,7 +214,7 @@ def main() -> None:
 
     cfg = Config.from_file(args.config)
     port = args.port or cfg.web_port
-    uvicorn.run(create_app(cfg), host=args.host, port=port)
+    uvicorn.run(create_app(cfg, config_path=args.config), host=args.host, port=port)
 
 
 if __name__ == "__main__":

@@ -104,3 +104,71 @@ def test_no_token_required_when_unset(tmp_path):
     _seed_clip(tmp_path)
     client = TestClient(create_app(_make_config(tmp_path, api_token="")))
     assert client.get("/clips").status_code == 200
+
+
+# --- settings -------------------------------------------------------------
+
+
+def _write_config(tmp_path, **overrides) -> Path:
+    data = {
+        "retention_days": 30,
+        "notifications_enabled": False,
+        "cameras": [
+            {
+                "name": "cam",
+                "host": "192.168.1.247",
+                "username": "admin",
+                "password": "supersecret",
+                "rtsp_path": "/live/ch0",
+                "sensitivity": 0.02,
+            }
+        ],
+    }
+    data.update(overrides)
+    p = tmp_path / "config.json"
+    p.write_text(json.dumps(data), encoding="utf-8")
+    return p
+
+
+def test_get_settings_never_exposes_password(tmp_path):
+    cfg_path = _write_config(tmp_path)
+    cfg = Config.from_file(cfg_path)
+    client = TestClient(create_app(cfg, config_path=cfg_path))
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["cameras"][0]["sensitivity"] == 0.02
+    assert "password" not in body["cameras"][0]
+    assert "username" not in body["cameras"][0]
+
+
+def test_update_sensitivity_preserves_password(tmp_path):
+    cfg_path = _write_config(tmp_path)
+    cfg = Config.from_file(cfg_path)
+    client = TestClient(create_app(cfg, config_path=cfg_path))
+    resp = client.put(
+        "/settings",
+        json={"cameras": [{"name": "cam", "host": "192.168.1.247", "sensitivity": 0.08}]},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["cameras"][0]["sensitivity"] == 0.08
+    # Password must survive the round-trip in config.json.
+    saved = json.loads(cfg_path.read_text(encoding="utf-8"))
+    assert saved["cameras"][0]["password"] == "supersecret"
+
+
+def test_update_retention(tmp_path):
+    cfg_path = _write_config(tmp_path)
+    cfg = Config.from_file(cfg_path)
+    client = TestClient(create_app(cfg, config_path=cfg_path))
+    resp = client.put("/settings", json={"retention_days": 7})
+    assert resp.status_code == 200
+    assert resp.json()["retention_days"] == 7
+    assert json.loads(cfg_path.read_text(encoding="utf-8"))["retention_days"] == 7
+
+
+def test_update_settings_rejected_without_config_path(tmp_path):
+    cfg = _make_config(tmp_path)
+    client = TestClient(create_app(cfg, config_path=None))
+    resp = client.put("/settings", json={"retention_days": 7})
+    assert resp.status_code == 400

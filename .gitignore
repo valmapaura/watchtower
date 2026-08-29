@@ -29,7 +29,12 @@ recordings/
 logs/
 
 # Vendor client installer (large binary)
-client/
+client/CAM720_1.0.0.6.exe
+
+# Next.js build output (client/web holds the web UI)
+client/web/.next/
+client/web/node_modules/
+client/web/out/
 
 # Editor
 .vscode/

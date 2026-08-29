@@ -1,0 +1,177 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Shell from "@/components/Shell";
+import { api, type Clip } from "@/lib/api";
+import { formatDate, formatDuration, motionLabel } from "@/lib/format";
+
+export default function Home() {
+  const [clips, setClips] = useState<Clip[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [playing, setPlaying] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .listClips()
+      .then((data) => {
+        if (!cancelled) setClips(data);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load clips");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  const handleDelete = async (clip: Clip) => {
+    if (!confirm(`Delete clip from ${clip.camera}?`)) return;
+    try {
+      await api.deleteClip(clip.filename);
+      setClips((prev) => prev.filter((c) => c.filename !== clip.filename));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete failed");
+    }
+  };
+
+  return (
+    <Shell>
+      <div className="mx-auto max-w-6xl px-8 py-8">
+        <header className="mb-8 flex items-end justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Timeline</h1>
+            <p className="mt-1 text-sm text-zinc-500">
+              {clips.length} recorded clip{clips.length === 1 ? "" : "s"}
+            </p>
+          </div>
+          <button
+            onClick={() => setReloadKey((k) => k + 1)}
+            className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition-colors hover:bg-zinc-800"
+          >
+            Refresh
+          </button>
+        </header>
+
+        {error && (
+          <div className="mb-6 rounded-lg border border-red-900/50 bg-red-950/40 px-4 py-3 text-sm text-red-300">
+            {error}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="h-48 animate-pulse rounded-xl bg-zinc-900" />
+            ))}
+          </div>
+        ) : clips.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-800 py-24 text-center">
+            <div className="text-4xl">🎥</div>
+            <p className="mt-4 text-sm text-zinc-400">No clips recorded yet</p>
+            <p className="mt-1 text-xs text-zinc-600">
+              Motion-triggered recordings will appear here.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {clips.map((clip) => (
+              <ClipCard
+                key={clip.filename}
+                clip={clip}
+                playing={playing === clip.filename}
+                onPlay={() => setPlaying(clip.filename)}
+                onDelete={() => handleDelete(clip)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </Shell>
+  );
+}
+
+function ClipCard({
+  clip,
+  playing,
+  onPlay,
+  onDelete,
+}: {
+  clip: Clip;
+  playing: boolean;
+  onPlay: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="group overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/60 transition-colors hover:border-zinc-700">
+      <div className="relative aspect-video bg-black">
+        {playing ? (
+          <video
+            src={api.streamUrl(clip.filename)}
+            controls
+            autoPlay
+            className="h-full w-full"
+          />
+        ) : (
+          <button
+            onClick={onPlay}
+            className="flex h-full w-full items-center justify-center bg-zinc-950"
+            aria-label={`Play ${clip.filename}`}
+          >
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/90 text-zinc-950 shadow-lg transition-transform group-hover:scale-105">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </div>
+          </button>
+        )}
+      </div>
+
+      <div className="p-4">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-zinc-200">{clip.camera}</span>
+          <MotionBadge score={clip.motion_score} />
+        </div>
+        <div className="mt-1 text-xs text-zinc-500">{formatDate(clip.start_utc)}</div>
+        <div className="mt-3 flex items-center justify-between text-xs">
+          <span className="text-zinc-400">⏱ {formatDuration(clip.duration_s)}</span>
+          <div className="flex gap-2">
+            <a
+              href={api.downloadUrl(clip.filename)}
+              download
+              className="rounded-md border border-zinc-700 px-2 py-1 text-zinc-300 transition-colors hover:bg-zinc-800"
+            >
+              Download
+            </a>
+            <button
+              onClick={onDelete}
+              className="rounded-md border border-zinc-700 px-2 py-1 text-zinc-400 transition-colors hover:border-red-900 hover:bg-red-950/40 hover:text-red-300"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MotionBadge({ score }: { score: number }) {
+  const label = motionLabel(score);
+  const color =
+    label === "High"
+      ? "bg-red-500/15 text-red-400"
+      : label === "Medium"
+        ? "bg-amber-500/15 text-amber-400"
+        : "bg-zinc-700/40 text-zinc-400";
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${color}`}>
+      {label}
+    </span>
+  );
+}
