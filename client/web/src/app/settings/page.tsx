@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Shell from "@/components/Shell";
+import InfoTip from "@/components/InfoTip";
 import { api, type CameraSettings, type Settings } from "@/lib/api";
 
 export default function SettingsPage() {
@@ -76,7 +77,11 @@ export default function SettingsPage() {
         <header className="mb-6 sm:mb-8">
           <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Motion detection and recording preferences.
+            Tune how your cameras record. Tap the{" "}
+            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-zinc-700/60 text-[10px] font-semibold text-zinc-300">
+              ?
+            </span>{" "}
+            icons to learn what each option does.
           </p>
         </header>
 
@@ -90,9 +95,9 @@ export default function SettingsPage() {
           <div className="space-y-6">
             {/* General */}
             <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6">
-              <h2 className="text-sm font-semibold text-zinc-200">General</h2>
+              <h2 className="text-sm font-semibold text-zinc-200">Recording storage</h2>
               <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Retention (days)">
+                <Field label="Keep recordings for (days)">
                   <input
                     type="number"
                     min={0}
@@ -105,8 +110,12 @@ export default function SettingsPage() {
                     }
                     className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-emerald-500"
                   />
+                  <InfoTip title="How long recordings are kept">
+                    Recordings older than this are deleted automatically to save
+                    space. Set to 0 to keep everything forever.
+                  </InfoTip>
                 </Field>
-                <Field label="Max storage (GB)">
+                <Field label="Max space to use (GB)">
                   <input
                     type="number"
                     min={0}
@@ -120,11 +129,12 @@ export default function SettingsPage() {
                     }
                     className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-emerald-500"
                   />
-                  <p className="mt-1 text-[11px] text-zinc-600">
-                    0 = unlimited. Oldest clips are deleted when full.
-                  </p>
+                  <InfoTip title="How much disk space to use">
+                    When recordings fill up this much space, the oldest ones are
+                    deleted first to make room. Set to 0 for no limit.
+                  </InfoTip>
                 </Field>
-                <Field label="Notifications">
+                <Field label="Get notified when motion is detected">
                   <label className="flex cursor-pointer items-center gap-3 pt-2">
                     <input
                       type="checkbox"
@@ -138,9 +148,12 @@ export default function SettingsPage() {
                       className="h-4 w-4 accent-emerald-500"
                     />
                     <span className="text-sm text-zinc-400">
-                      Notify on motion
+                      Send me a notification
                     </span>
                   </label>
+                  <InfoTip title="Motion alerts">
+                    Get a pop-up on your computer when your camera spots movement.
+                  </InfoTip>
                 </Field>
               </div>
             </section>
@@ -158,7 +171,15 @@ export default function SettingsPage() {
 
                 <div className="mt-5">
                   <div className="flex items-center justify-between">
-                    <label className="text-sm text-zinc-400">Motion sensitivity</label>
+                    <label className="text-sm text-zinc-400">
+                      How easily motion triggers a recording
+                      <InfoTip title="Motion sensitivity">
+                        How much movement is needed before your camera starts
+                        recording. If you miss events, make it more sensitive. If
+                        you get too many clips (e.g. from trees or traffic), make
+                        it less sensitive.
+                      </InfoTip>
+                    </label>
                     <span className="rounded-md bg-zinc-800 px-2 py-0.5 font-mono text-xs text-emerald-400">
                       {cam.sensitivity.toFixed(3)}
                     </span>
@@ -175,53 +196,66 @@ export default function SettingsPage() {
                     className="mt-3 w-full accent-emerald-500"
                   />
                   <div className="mt-1 flex justify-between text-[11px] text-zinc-600">
-                    <span>Very sensitive</span>
+                    <span>More sensitive</span>
                     <span>Less sensitive</span>
                   </div>
-                  <p className="mt-2 text-xs text-zinc-500">
-                    Lower values trigger on smaller changes; higher values ignore
-                    minor movement.
-                  </p>
                 </div>
 
                 <div className="mt-5">
-                  <label className="text-sm text-zinc-400">Detector</label>
+                  <label className="text-sm text-zinc-400">
+                    What should trigger a recording?
+                    <InfoTip title="Detection mode">
+                      <strong>Motion</strong> records whenever anything moves.
+                      <br />
+                      <strong>Smart detection</strong> uses AI to recognise people,
+                      vehicles, and animals — so a swaying tree won&apos;t set it
+                      off.
+                    </InfoTip>
+                  </label>
                   <select
                     value={cam.detector}
                     onChange={(e) => updateCamera(i, { detector: e.target.value })}
                     className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-emerald-500"
                   >
-                    <option value="motion">Motion (frame diff)</option>
-                    <option value="object">Object detection (YOLO)</option>
+                    <option value="motion">Motion — record when anything moves</option>
+                    <option value="object">Smart — recognise people, vehicles, animals</option>
                   </select>
-                  <p className="mt-2 text-xs text-zinc-500">
-                    Object detection can identify people, vehicles, and animals.
-                  </p>
                 </div>
 
                 {cam.detector === "object" && (
                   <div className="mt-5">
-                    <label className="text-sm text-zinc-400">Detect categories</label>
+                    <label className="text-sm text-zinc-400">
+                      What to look for
+                      <InfoTip title="What to detect">
+                        Choose what you want your camera to notice. Only the things
+                        you pick will trigger a recording.
+                      </InfoTip>
+                    </label>
                     <div className="mt-2 flex flex-wrap gap-2">
-                      {["person", "vehicle", "animal", "bicycle"].map((cat) => {
-                        const checked = cam.detect_categories.includes(cat);
+                      {[
+                        { id: "person", label: "People" },
+                        { id: "vehicle", label: "Vehicles" },
+                        { id: "animal", label: "Animals" },
+                        { id: "bicycle", label: "Bicycles" },
+                      ].map((cat) => {
+                        const checked = cam.detect_categories.includes(cat.id);
                         return (
                           <button
-                            key={cat}
+                            key={cat.id}
                             type="button"
                             onClick={() => {
                               const next = checked
-                                ? cam.detect_categories.filter((c) => c !== cat)
-                                : [...cam.detect_categories, cat];
+                                ? cam.detect_categories.filter((c) => c !== cat.id)
+                                : [...cam.detect_categories, cat.id];
                               updateCamera(i, { detect_categories: next });
                             }}
-                            className={`rounded-full border px-3 py-1 text-xs capitalize transition-colors ${
+                            className={`rounded-full border px-3 py-1 text-xs transition-colors ${
                               checked
                                 ? "border-emerald-500 bg-emerald-500/15 text-emerald-300"
                                 : "border-zinc-700 text-zinc-400 hover:bg-zinc-800"
                             }`}
                           >
-                            {cat}
+                            {cat.label}
                           </button>
                         );
                       })}
@@ -230,7 +264,7 @@ export default function SettingsPage() {
                 )}
 
                 <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  <Field label="Pre-roll (s)">
+                  <Field label="Record before motion (s)">
                     <input
                       type="number"
                       min={0}
@@ -241,8 +275,12 @@ export default function SettingsPage() {
                       }
                       className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-emerald-500"
                     />
+                    <InfoTip title="Record before motion">
+                      How much footage to keep from just before motion starts, so
+                      you don&apos;t miss what led up to it.
+                    </InfoTip>
                   </Field>
-                  <Field label="Post-roll (s)">
+                  <Field label="Record after motion (s)">
                     <input
                       type="number"
                       min={0}
@@ -253,8 +291,12 @@ export default function SettingsPage() {
                       }
                       className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-emerald-500"
                     />
+                    <InfoTip title="Record after motion">
+                      How long to keep recording after motion stops, so you catch
+                      the tail end of what happened.
+                    </InfoTip>
                   </Field>
-                  <Field label="Min duration (s)">
+                  <Field label="Shortest clip (s)">
                     <input
                       type="number"
                       min={0}
@@ -265,6 +307,10 @@ export default function SettingsPage() {
                       }
                       className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-emerald-500"
                     />
+                    <InfoTip title="Shortest clip">
+                      Very brief blips (like a bird flying past) are ignored unless
+                      they last at least this long.
+                    </InfoTip>
                   </Field>
                 </div>
 
@@ -277,7 +323,13 @@ export default function SettingsPage() {
                     }
                     className="h-4 w-4 accent-emerald-500"
                   />
-                  <span className="text-sm text-zinc-400">Save snapshot on motion</span>
+                  <span className="text-sm text-zinc-400">
+                    Save a photo when motion is detected
+                  </span>
+                  <InfoTip title="Save a photo">
+                    Also save a still photo at the moment motion starts, handy for
+                    a quick glance without opening the video.
+                  </InfoTip>
                 </label>
               </section>
             ))}

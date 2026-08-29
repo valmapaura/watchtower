@@ -93,10 +93,12 @@ export default function Home() {
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-800 py-24 text-center">
             <div className="text-4xl">🎥</div>
             <p className="mt-4 text-sm text-zinc-400">
-              {category === "all" ? "No clips recorded yet" : `No ${category} clips`}
+              {category === "all" ? "No recordings yet" : `No ${category} recordings`}
             </p>
-            <p className="mt-1 text-xs text-zinc-600">
-              Motion-triggered recordings will appear here.
+            <p className="mt-1 max-w-sm text-xs text-zinc-600">
+              When your camera spots movement, the clip will show up here
+              automatically. You can also watch your cameras live from the{" "}
+              <span className="text-zinc-400">Live</span> tab.
             </p>
           </div>
         ) : (

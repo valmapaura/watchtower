@@ -71,9 +71,11 @@ export default function LivePage() {
         ) : cameras.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-800 py-24 text-center">
             <div className="text-4xl">📷</div>
-            <p className="mt-4 text-sm text-zinc-400">No cameras configured</p>
-            <p className="mt-1 text-xs text-zinc-600">
-              Add a camera in Settings to view it live.
+            <p className="mt-4 text-sm text-zinc-400">No cameras set up yet</p>
+            <p className="mt-1 max-w-sm text-xs text-zinc-600">
+              Add your camera in the{" "}
+              <span className="text-zinc-400">Settings</span> tab and it will
+              appear here so you can watch it live.
             </p>
           </div>
         ) : (
