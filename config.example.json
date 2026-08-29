@@ -1,0 +1,11 @@
+{
+  "camera": {
+    "name": "cam720",
+    "host": "192.168.1.247",
+    "web_port": 80,
+    "rtsp_port": 554,
+    "username": "admin",
+    "password": "CHANGE_ME",
+    "rtsp_path": "/live/ch0"
+  }
+}
