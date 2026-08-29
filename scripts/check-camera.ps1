@@ -10,10 +10,20 @@
     .\scripts\check-camera.ps1 -CameraHost 192.168.1.247
 #>
 param(
-    [string]$CameraHost = "192.168.1.247"
+    [string]$CameraHost = ""
 )
 
 $ErrorActionPreference = "Continue"
+
+# If no host was passed, try to read it from config.json (if present).
+if (-not $CameraHost) {
+    $configPath = Join-Path $PSScriptRoot "..\config.json"
+    if (Test-Path $configPath) {
+        $cam = (Get-Content $configPath -Raw | ConvertFrom-Json).camera
+        if ($cam.host) { $CameraHost = $cam.host }
+    }
+}
+if (-not $CameraHost) { $CameraHost = "192.168.1.247" }
 
 Write-Host "== cam720 health check: $CameraHost ==" -ForegroundColor Cyan
 

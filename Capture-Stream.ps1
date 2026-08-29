@@ -23,8 +23,11 @@ param(
     [bool]$IncludeAudio = $false
 )
 
-# Resolve ffmpeg path (bundled with the camera tools)
-$ffmpegPath = Resolve-Path "installation\CAM720VmsTools\ffmpegExe\ffmpeg.exe" -ErrorAction Stop
+# Resolve ffmpeg path (bundled with the camera tools) relative to this script, so it
+# works regardless of the current working directory.
+$root = $PSScriptRoot
+if (-not $root) { $root = (Get-Location).Path }
+$ffmpegPath = Resolve-Path (Join-Path $root "installation\CAM720VmsTools\ffmpegExe\ffmpeg.exe") -ErrorAction Stop
 
 # Ensure the output directory exists
 if (-not (Test-Path $OutputDir)) { New-Item -ItemType Directory -Path $OutputDir | Out-Null }
@@ -38,6 +41,7 @@ $outputFile = Join-Path $OutputDir "cam_$timestamp.mp4"
 #   * $true  – re-encode audio to AAC so it's compatible with the MP4 container.
 #   * $false – drop audio with "-an" to produce a valid MP4.
 $ffArgs = @(
+    "-rtsp_transport", "tcp",
     "-i", $RtspUrl,
     "-c:v", "copy"
 )

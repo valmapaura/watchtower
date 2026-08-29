@@ -145,7 +145,6 @@ With this helper in place you can now **capture** and **store** video streams fr
 ├── requirements.txt
 ├── docs/
 │   ├── access-guide.md
-│   ├── camera-177.md
 │   └── camera-specs.md
 ├── installation/
 │   └── CAM720VmsTools/

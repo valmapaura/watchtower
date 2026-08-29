@@ -22,8 +22,11 @@ param(
     [string]$LogDir = ".\logs"
 )
 
-# Resolve ffmpeg path (bundled with the camera tools)
-$ffmpegPath = Resolve-Path "installation\CAM720VmsTools\ffmpegExe\ffmpeg.exe" -ErrorAction Stop
+# Resolve ffmpeg path (bundled with the camera tools) relative to this script, so it
+# works regardless of the current working directory.
+$root = $PSScriptRoot
+if (-not $root) { $root = (Get-Location).Path }
+$ffmpegPath = Resolve-Path (Join-Path $root "installation\CAM720VmsTools\ffmpegExe\ffmpeg.exe") -ErrorAction Stop
 
 # Ensure the log directory exists
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir | Out-Null }
