@@ -49,7 +49,7 @@ seen, and continues **5‑s after** motion stops. Pure Python + OpenCV, modular.
 
 ```bash
 pip install -e .          # install the package (editable)
-python -m pytest          # run the test suite (35 tests)
+python -m pytest          # run the test suite (47 tests)
 
 # Run continuously against the camera(s) in config.json
 python -m watchtower.main --config config.json
@@ -60,6 +60,27 @@ python -m watchtower.main --config config.json --once
 
 Clips are saved under `recordings/<camera>/<date>/` with a `manifest.json`.
 Tune motion in `config.json` (`sensitivity`, `pre_seconds`, `post_seconds`, `min_duration`).
+
+## 🌐 Web API (Phase 4 prep)
+
+A FastAPI layer that serves the clip library to a browser client. It does **not**
+run the recorder — it reads what the recorder wrote.
+
+```bash
+python -m watchtower.api --config config.json          # localhost:8000
+python -m watchtower.api --config config.json --host 0.0.0.0   # expose on LAN
+```
+
+| Endpoint                   | Description                                         |
+| -------------------------- | --------------------------------------------------- |
+| `GET /health`              | Liveness check                                      |
+| `GET /clips`               | List all clips (metadata from each `manifest.json`) |
+| `GET /clips/{id}/stream`   | Stream the MP4 (HTTP range → seeking works)         |
+| `GET /clips/{id}/download` | Download the clip as an attachment                  |
+| `DELETE /clips/{id}`       | Delete a clip + its manifest                        |
+
+**Auth:** set `"api_token"` in `config.json` to require a bearer token on every
+request. Leave it empty (`""`) for an open API — fine when bound to localhost only.
 
 ### Windows desktop notifications (optional)
 

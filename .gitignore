@@ -1,6 +1,10 @@
 # Local credentials - never commit this file
 config.json
 
+# Local secrets (RTSP URLs, API tokens) - never commit
+secrets.local.json
+*.local.json
+
 # Python
 __pycache__/
 *.pyc

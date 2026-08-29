@@ -79,9 +79,14 @@ Goal: mirror local footage to the cloud, **still keeping local as source of trut
 
 Goal: watch and export clips from any browser. _Simple and uncomplicated._
 
-- [ ] Lightweight web server (FastAPI/Flask) serving `GET /clips` (list) and `GET /clips/{id}/stream` (video).
+- [x] **API layer (prep)** — `src/watchtower/api.py` (FastAPI): `GET /clips`,
+      `GET /clips/{id}/stream` (range requests), `GET /clips/{id}/download`,
+      `DELETE /clips/{id}`, `GET /health`. 9 integration tests.
+- [x] **Metadata listing** — `StorageBackend.list_metadata()` reads each clip's
+      `manifest.json` so the UI can show thumbnails, timestamps, motion scores.
+- [x] **Optional bearer auth** — `api_token` in config.json; empty = open (localhost).
 - [ ] Minimal SPA: grid of clips, click to play, download/delete buttons, filter by date/camera.
-- [ ] Serve video efficiently (HTTP range requests so MP4 seeking works).
+- [ ] Serve video efficiently (HTTP range requests so MP4 seeking works) — API ready.
 - [ ] Optional live thumbnail view of cameras.
 
 ## Phase 5 — Portability (Android & beyond)

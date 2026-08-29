@@ -4,5 +4,10 @@ numpy>=1.21
 # Windows local notifications
 winotify>=1.1.0
 
+# Web UI / API (Phase 4)
+fastapi>=0.110
+uvicorn>=0.29
+
 # testing
 pytest>=7.0
+httpx>=0.27

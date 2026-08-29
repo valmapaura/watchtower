@@ -86,7 +86,29 @@ class LocalDiskBackend(StorageBackend):
     def get(self, path: Path) -> Path:
         return path
 
+    def manifest_path(self, clip: Path) -> Path:
+        """Return the manifest path that sits alongside a clip."""
+        return clip.with_suffix(clip.suffix + ".manifest.json")
+
+    def list_metadata(self) -> list[ClipMetadata]:
+        """Return ``ClipMetadata`` for every stored clip (oldest first).
+
+        Clips whose manifest is missing or unreadable are skipped so a
+        partially-written clip never breaks the listing.
+        """
+        result: list[ClipMetadata] = []
+        for clip in self.list():
+            manifest = self.manifest_path(clip)
+            if not manifest.exists():
+                continue
+            try:
+                data = json.loads(manifest.read_text(encoding="utf-8"))
+                result.append(ClipMetadata(**data))
+            except (json.JSONDecodeError, TypeError):
+                continue
+        return result
+
     def delete(self, path: Path) -> None:
-        manifest = path.with_suffix(path.suffix + ".manifest.json")
+        manifest = self.manifest_path(path)
         path.unlink(missing_ok=True)
         manifest.unlink(missing_ok=True)
