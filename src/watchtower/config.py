@@ -57,6 +57,7 @@ class Config:
     notifications_enabled: bool = False  # future: webhook/email on motion
     web_port: int = 8000           # port for the browser UI / API server
     api_token: str = ""            # optional bearer token for the API ("" = no auth)
+    ui_password: str = ""          # password to access the web UI ("" = no login)
 
     @classmethod
     def from_file(cls, path: Path | str) -> "Config":
@@ -85,6 +86,7 @@ class Config:
             notifications_enabled=bool(raw.get("notifications_enabled", False)),
             web_port=int(raw.get("web_port", 8000)),
             api_token=raw.get("api_token", ""),
+            ui_password=str(raw.get("ui_password", "")),
         )
 
     @staticmethod

@@ -7,36 +7,71 @@ download, and delete recordings. This is a thin read/write layer over the
 Security model (matches the project's "private by default" principle):
   * The server binds to localhost by default. To expose it on the LAN, set
     ``host`` explicitly when running (e.g. ``--host 0.0.0.0``).
-  * If ``api_token`` is set in config.json, every request must carry it as a
-    bearer token. When it is empty, the API is open (fine for localhost-only).
+  * If ``ui_password`` is set in config.json, the web UI requires a login
+    (session cookie). When it is empty, the API is open (fine for
+    localhost-only).
 """
 from __future__ import annotations
 
+import hmac
 import json
+import secrets
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from .config import Config
 from .live import LiveStream
 from .storage import LocalDiskBackend
 
-_bearer = HTTPBearer(auto_error=False)
+COOKIE_NAME = "wt_session"
 
 
-def _require_token(
-    config: Config,
-    credentials: HTTPAuthorizationCredentials | None,
-) -> None:
-    """Raise 401 unless the request carries the configured bearer token."""
-    if not config.api_token:
-        return
-    if credentials is None or credentials.credentials != config.api_token:
-        raise HTTPException(status_code=401, detail="Invalid or missing API token")
+class LoginRequest(BaseModel):
+    password: str
+
+
+class CredentialsChecker:
+    """Authenticates UI logins against the configured password.
+
+    The UI password is stored in the (git-ignored) config.json, alongside the
+    camera credentials. It is compared in constant time to avoid side-channel
+    timing leaks.
+    """
+
+    def __init__(self, config: Config):
+        self._enabled = bool(config.ui_password)
+        self._stored = config.ui_password
+
+    @property
+    def enabled(self) -> bool:
+        return self._enabled
+
+    def verify(self, password: str) -> bool:
+        if not self._enabled:
+            return True
+        return hmac.compare_digest(password, self._stored)
+
+
+class SessionStore:
+    """In-memory store of valid login session tokens."""
+
+    def __init__(self) -> None:
+        self._tokens: set[str] = set()
+
+    def create(self) -> str:
+        token = secrets.token_urlsafe(32)
+        self._tokens.add(token)
+        return token
+
+    def valid(self, token: str | None) -> bool:
+        return token is not None and token in self._tokens
+
+    def revoke(self, token: str) -> None:
+        self._tokens.discard(token)
 
 
 class CameraSettings(BaseModel):
@@ -84,20 +119,51 @@ def create_app(
 
     app = FastAPI(title="watchtower", version="0.1.0")
 
-    # Allow the browser UI (Next.js dev server on :3000, or any origin) to call
-    # this API. The API is protected by the optional bearer token, so opening
-    # CORS to all origins is acceptable for a local-first tool.
+    # CORS with credentials support so the browser UI can send/receive cookies.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=["http://localhost:3000"],
         allow_methods=["*"],
         allow_headers=["*"],
+        allow_credentials=True,
     )
 
-    def auth(
-        credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
-    ) -> None:
-        _require_token(config, credentials)
+    creds = CredentialsChecker(config)
+    sessions = SessionStore()
+
+    @app.post("/login")
+    def login(req: LoginRequest, response: Response):
+        """Authenticate and set a session cookie."""
+        if not creds.verify(req.password):
+            return JSONResponse(status_code=401, content={"detail": "Invalid password"})
+        token = sessions.create()
+        response.set_cookie(
+            COOKIE_NAME,
+            token,
+            httponly=True,
+            samesite="lax",
+            max_age=30 * 86400,  # 30 days
+        )
+        return {"ok": True}
+
+    @app.post("/logout")
+    def logout(request: Request, response: Response):
+        sessions.revoke(request.cookies.get(COOKIE_NAME, ""))
+        response.delete_cookie(COOKIE_NAME)
+
+    @app.get("/auth-status")
+    def auth_status(request: Request) -> dict:
+        """Return whether a valid session exists (for the UI to check on load)."""
+        if not creds.enabled:
+            return {"authenticated": True}
+        return {"authenticated": sessions.valid(request.cookies.get(COOKIE_NAME))}
+
+    def auth(request: Request) -> None:
+        """Require a valid session unless auth is disabled."""
+        if not creds.enabled:
+            return
+        if not sessions.valid(request.cookies.get(COOKIE_NAME)):
+            raise HTTPException(status_code=401, detail="Not authenticated")
 
     @app.get("/health")
     def health() -> dict:

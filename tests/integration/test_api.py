@@ -12,11 +12,12 @@ from watchtower.config import Config
 from watchtower.storage import ClipMetadata, LocalDiskBackend
 
 
-def _make_config(tmp_path, api_token: str = "") -> Config:
+def _make_config(tmp_path, api_token: str = "", ui_password: str = "") -> Config:
     return Config(
         cameras=[],
         output_dir=tmp_path / "recordings",
         api_token=api_token,
+        ui_password=ui_password,
     )
 
 
@@ -97,22 +98,25 @@ def test_path_traversal_rejected(tmp_path):
     assert resp.status_code == 404
 
 
-def test_api_token_required_when_set(tmp_path):
+def test_ui_password_required_when_set(tmp_path):
     _seed_clip(tmp_path)
-    client = TestClient(create_app(_make_config(tmp_path, api_token="sekret")))
-    # No token -> 401
+    client = TestClient(create_app(_make_config(tmp_path, ui_password="sekret")))
+    # Not logged in -> 401
     assert client.get("/clips").status_code == 401
-    # Wrong token -> 401
-    assert client.get("/clips", headers={"Authorization": "Bearer wrong"}).status_code == 401
-    # Correct token -> 200
-    resp = client.get("/clips", headers={"Authorization": "Bearer sekret"})
+    # Wrong password -> 401
+    assert client.post("/login", json={"password": "wrong"}).status_code == 401
+    # Correct password -> 200 and sets a session cookie
+    resp = client.post("/login", json={"password": "sekret"})
     assert resp.status_code == 200
-
-
-def test_no_token_required_when_unset(tmp_path):
-    _seed_clip(tmp_path)
-    client = TestClient(create_app(_make_config(tmp_path, api_token="")))
+    # With the cookie, the API is accessible.
     assert client.get("/clips").status_code == 200
+
+
+def test_no_auth_required_when_password_unset(tmp_path):
+    _seed_clip(tmp_path)
+    client = TestClient(create_app(_make_config(tmp_path, ui_password="")))
+    assert client.get("/clips").status_code == 200
+    assert client.get("/auth-status").json() == {"authenticated": True}
 
 
 # --- settings -------------------------------------------------------------
