@@ -2,15 +2,19 @@
 
 import { useEffect, useState } from "react";
 import Shell from "@/components/Shell";
+import AuthGate from "@/components/AuthGate";
+import { useAuth } from "@/lib/auth";
 import { api, type LiveCamera } from "@/lib/api";
 
 export default function LivePage() {
+  const { authenticated } = useAuth();
   const [cameras, setCameras] = useState<LiveCamera[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!authenticated) return;
     let cancelled = false;
     api
       .listLiveCameras()
@@ -29,11 +33,12 @@ export default function LivePage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authenticated]);
 
   return (
-    <Shell>
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-8 sm:py-8">
+    <AuthGate>
+      <Shell>
+        <div className="mx-auto max-w-6xl px-4 py-6 sm:px-8 sm:py-8">
         <header className="mb-6 flex flex-col gap-3 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Live</h1>
@@ -101,6 +106,7 @@ export default function LivePage() {
           </div>
         )}
       </div>
-    </Shell>
+      </Shell>
+    </AuthGate>
   );
 }

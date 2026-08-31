@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Shell from "@/components/Shell";
+import AuthGate from "@/components/AuthGate";
+import { useAuth } from "@/lib/auth";
 import { api, type Clip } from "@/lib/api";
 import { formatDate, formatDuration, motionLabel } from "@/lib/format";
 
 export default function Home() {
+  const { authenticated } = useAuth();
   const [clips, setClips] = useState<Clip[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -14,6 +17,7 @@ export default function Home() {
   const [category, setCategory] = useState<string>("all");
 
   useEffect(() => {
+    if (!authenticated) return;
     let cancelled = false;
     api
       .listClips()
@@ -29,7 +33,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [reloadKey]);
+  }, [reloadKey, authenticated]);
 
   const categories = Array.from(new Set(clips.map((c) => c.category))).sort();
   const filtered =
@@ -46,8 +50,9 @@ export default function Home() {
   };
 
   return (
-    <Shell>
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-8 sm:py-8">
+    <AuthGate>
+      <Shell>
+        <div className="mx-auto max-w-6xl px-4 py-6 sm:px-8 sm:py-8">
         <header className="mb-6 flex flex-col gap-3 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Timeline</h1>
@@ -115,7 +120,8 @@ export default function Home() {
           </div>
         )}
       </div>
-    </Shell>
+      </Shell>
+    </AuthGate>
   );
 }
 

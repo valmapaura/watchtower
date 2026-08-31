@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Shell from "@/components/Shell";
+import AuthGate from "@/components/AuthGate";
 import InfoTip from "@/components/InfoTip";
+import { useAuth } from "@/lib/auth";
 import { api, type CameraSettings, type Settings } from "@/lib/api";
 
 export default function SettingsPage() {
+  const { authenticated } = useAuth();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -13,6 +16,7 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
+    if (!authenticated) return;
     let cancelled = false;
     api
       .getSettings()
@@ -28,7 +32,7 @@ export default function SettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authenticated]);
 
   const updateCamera = (index: number, patch: Partial<CameraSettings>) => {
     setSettings((prev) => {
@@ -62,18 +66,21 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <Shell>
-        <div className="mx-auto max-w-3xl px-4 py-6 sm:px-8 sm:py-8">
-          <div className="h-8 w-40 animate-pulse rounded bg-zinc-900" />
-          <div className="mt-6 h-64 animate-pulse rounded-xl bg-zinc-900" />
-        </div>
-      </Shell>
+      <AuthGate>
+        <Shell>
+          <div className="mx-auto max-w-3xl px-4 py-6 sm:px-8 sm:py-8">
+            <div className="h-8 w-40 animate-pulse rounded bg-zinc-900" />
+            <div className="mt-6 h-64 animate-pulse rounded-xl bg-zinc-900" />
+          </div>
+        </Shell>
+      </AuthGate>
     );
   }
 
   return (
-    <Shell>
-      <div className="mx-auto max-w-3xl px-4 py-6 sm:px-8 sm:py-8">
+    <AuthGate>
+      <Shell>
+        <div className="mx-auto max-w-3xl px-4 py-6 sm:px-8 sm:py-8">
         <header className="mb-6 sm:mb-8">
           <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
           <p className="mt-1 text-sm text-zinc-500">
@@ -347,7 +354,8 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
-    </Shell>
+      </Shell>
+    </AuthGate>
   );
 }
 

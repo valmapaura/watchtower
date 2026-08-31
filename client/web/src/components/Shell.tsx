@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 
 const NAV = [
   { href: "/", label: "Timeline", icon: "▦" },
@@ -11,6 +12,7 @@ const NAV = [
 
 export default function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { logout } = useAuth();
 
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
@@ -45,6 +47,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+          <button
+            onClick={logout}
+            className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800/60 hover:text-zinc-200 lg:underline lg:underline-offset-4"
+          >
+            <span className="w-4 text-center">⎋</span>
+            Log out
+          </button>
         </nav>
 
         <div className="mt-auto hidden border-t border-zinc-800 px-5 py-4 text-[11px] text-zinc-600 lg:block">

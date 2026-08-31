@@ -9,6 +9,7 @@
   "notifications_enabled": false,
   "web_port": 8000,
   "api_token": "",
+  "ui_password": "",
   "cameras": [
     {
       "name": "watchtower",

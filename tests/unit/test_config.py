@@ -75,6 +75,17 @@ def test_max_storage_gb_override(tmp_path):
     assert cfg.max_storage_gb == 50.0
 
 
+def test_ui_password_default_and_override(tmp_path):
+    data = {"cameras": [{"name": "a", "host": "1.1.1.1", "password": "x"}]}
+    p = tmp_path / "config.json"
+    p.write_text(json.dumps(data), encoding="utf-8")
+    assert Config.from_file(p).ui_password == ""
+
+    data["ui_password"] = "hunter2"
+    p.write_text(json.dumps(data), encoding="utf-8")
+    assert Config.from_file(p).ui_password == "hunter2"
+
+
 def test_new_top_level_fields_override(tmp_path):
     data = {
         "storage_backend": "google_drive",
