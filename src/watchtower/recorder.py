@@ -88,8 +88,13 @@ class MotionRecorder:
 
         self._pre: list[tuple[float, object]] = []
         self._session: Session | None = None
-        self._fps = 10.0
+        # Start FPS from the source's reported value if available, else 15 (a
+        # safe mid-range guess). We refine it continuously from real frame
+        # timestamps below.
+        reported = getattr(self.source, "fps", None)
+        self._fps = float(reported) if reported else 15.0
         self._last_ts: float | None = None
+        self._fps_samples: list[float] = []  # apparent frame intervals (seconds)
         self.clips_saved = 0
 
     # -- public API -------------------------------------------------------
@@ -113,9 +118,16 @@ class MotionRecorder:
     # -- internals --------------------------------------------------------
 
     def _process(self, ts: float, img: object) -> None:
-        # Keep a rough FPS estimate so we can size the pre-buffer by time.
+        # Measure the real frame rate from actual arrival times (the camera's
+        # reported FPS can be inaccurate). We take the reciprocal interval and
+        # average over a sliding window, ignoring absurd outliers.
         if self._last_ts is not None and ts > self._last_ts:
-            self._fps = self._fps * 0.9 + (1.0 / (ts - self._last_ts)) * 0.1
+            dt = ts - self._last_ts
+            if 0.005 < dt < 1.0:  # expect 1..200 fps
+                self._fps_samples.append(1.0 / dt)
+                if len(self._fps_samples) > 60:
+                    self._fps_samples.pop(0)
+                self._fps = sum(self._fps_samples) / len(self._fps_samples)
         self._last_ts = ts
 
         motion, score = self.detector.motion_score(img)
