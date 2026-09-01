@@ -15,7 +15,11 @@ from __future__ import annotations
 
 import hmac
 import json
+import os
 import secrets
+import shutil
+import threading
+import time
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
@@ -28,6 +32,13 @@ from .live import LiveStream
 from .storage import LocalDiskBackend
 
 COOKIE_NAME = "wt_session"
+
+# When the launcher (scripts/dev.js) sees the backend exit with this code, it
+# respawns the process. Used by the "Restart server" button in Settings.
+RESTART_EXIT_CODE = 42
+
+# Server start time, used to report uptime in /status.
+_START_TIME = time.time()
 
 
 class LoginRequest(BaseModel):
@@ -57,14 +68,33 @@ class CredentialsChecker:
 
 
 class SessionStore:
-    """In-memory store of valid login session tokens."""
+    """Store of valid login session tokens.
 
-    def __init__(self) -> None:
+    Tokens are persisted to a small file so they survive a server restart
+    (e.g. the "Restart server" button in Settings) without logging the user
+    out. Tokens are random 32-byte secrets, so storing them on disk carries
+    the same trust level as the UI password in config.json.
+    """
+
+    def __init__(self, path: Path | None = None) -> None:
+        self._path = path
         self._tokens: set[str] = set()
+        if path is not None and path.exists():
+            try:
+                self._tokens = set(json.loads(path.read_text(encoding="utf-8")))
+            except (json.JSONDecodeError, TypeError):
+                self._tokens = set()
+
+    def _persist(self) -> None:
+        if self._path is not None:
+            self._path.write_text(
+                json.dumps(sorted(self._tokens)), encoding="utf-8"
+            )
 
     def create(self) -> str:
         token = secrets.token_urlsafe(32)
         self._tokens.add(token)
+        self._persist()
         return token
 
     def valid(self, token: str | None) -> bool:
@@ -72,6 +102,7 @@ class SessionStore:
 
     def revoke(self, token: str) -> None:
         self._tokens.discard(token)
+        self._persist()
 
 
 class CameraSettings(BaseModel):
@@ -151,7 +182,11 @@ def create_app(
     )
 
     creds = CredentialsChecker(config)
-    sessions = SessionStore()
+    # Persist sessions next to config.json so a restart doesn't log the user out.
+    session_path = (
+        config_path.with_name(".wt_sessions.json") if config_path is not None else None
+    )
+    sessions = SessionStore(session_path)
 
     @app.post("/login")
     def login(req: LoginRequest, response: Response):
@@ -190,6 +225,73 @@ def create_app(
     @app.get("/health")
     def health() -> dict:
         return {"status": "ok"}
+
+    @app.get("/status", dependencies=[Depends(auth)])
+    def status() -> dict:
+        """Return server health info for the Settings "Server" panel."""
+        return {
+            "status": "ok",
+            "version": app.version,
+            "uptime_s": int(time.time() - _START_TIME),
+            "web_port": config.web_port,
+            "output_dir": str(config.output_dir),
+            "camera_count": len(config.cameras),
+        }
+
+    @app.get("/storage", dependencies=[Depends(auth)])
+    def storage() -> dict:
+        """Return disk usage for the Settings "Storage" panel.
+
+        Reports total recordings size, the configured cap, and a per-camera
+        breakdown so the UI can show who is using the most space.
+        """
+        clips = backend.list()
+        total = sum(p.stat().st_size for p in clips)
+        cap_bytes = config.max_storage_gb * (1024**3) if config.max_storage_gb > 0 else 0
+
+        # Attribute each clip to a camera. Prefer the manifest's camera field
+        # (accurate even for clips stored at the recordings root); fall back to
+        # the first path segment. Clips with no manifest and no camera folder
+        # are grouped under "Uncategorised".
+        per_camera: dict[str, int] = {}
+        for p in clips:
+            cam = "unknown"
+            manifest = backend.manifest_path(p)
+            if manifest.exists():
+                try:
+                    data = json.loads(manifest.read_text(encoding="utf-8"))
+                    cam = data.get("camera") or cam
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            if cam == "unknown":
+                parts = p.relative_to(backend.root).parts
+                cam = parts[0] if parts else "unknown"
+                if cam.endswith(".mp4"):
+                    cam = "Uncategorised"
+            per_camera[cam] = per_camera.get(cam, 0) + p.stat().st_size
+
+        return {
+            "total_bytes": total,
+            "max_storage_gb": config.max_storage_gb,
+            "cap_bytes": cap_bytes,
+            "clip_count": len(clips),
+            "per_camera": [
+                {"camera": name, "bytes": size}
+                for name, size in sorted(per_camera.items(), key=lambda kv: -kv[1])
+            ],
+        }
+
+    @app.post("/restart", dependencies=[Depends(auth)])
+    def restart() -> dict:
+        """Ask the launcher to restart the backend.
+
+        The API process exits with a special code; scripts/dev.js watches for
+        that code and respawns it. If the backend wasn't started by the
+        launcher, this just shuts it down.
+        """
+        # Give the response a moment to flush before we exit.
+        threading.Timer(0.5, lambda: os._exit(RESTART_EXIT_CODE)).start()
+        return {"ok": True, "message": "Restarting…"}
 
     @app.get("/live", dependencies=[Depends(auth)])
     def list_live_cameras() -> list[dict]:

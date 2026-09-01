@@ -5,6 +5,7 @@ import Shell from "@/components/Shell";
 import AuthGate from "@/components/AuthGate";
 import InfoTip from "@/components/InfoTip";
 import AddCameraModal from "@/components/AddCameraModal";
+import ServerManager from "@/components/ServerManager";
 import { useAuth } from "@/lib/auth";
 import { api, type CameraSettings, type Settings } from "@/lib/api";
 
@@ -20,6 +21,36 @@ export default function SettingsPage() {
   const [pwNew, setPwNew] = useState("");
   const [pwError, setPwError] = useState<string | null>(null);
   const [pwSaved, setPwSaved] = useState(false);
+  const [testing, setTesting] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{
+    name: string;
+    ok: boolean;
+    message: string;
+    tips: string[];
+  } | null>(null);
+
+  const handleTestCamera = async (cam: CameraSettings) => {
+    setTesting(cam.name);
+    setTestResult(null);
+    try {
+      const res = await api.testCamera({
+        name: cam.name,
+        host: cam.host,
+        rtsp_port: cam.rtsp_port,
+        rtsp_path: cam.rtsp_path,
+      });
+      setTestResult({ name: cam.name, ok: res.ok, message: res.message, tips: res.tips });
+    } catch (e) {
+      setTestResult({
+        name: cam.name,
+        ok: false,
+        message: e instanceof Error ? e.message : "Couldn't test camera",
+        tips: [],
+      });
+    } finally {
+      setTesting(null);
+    }
+  };
 
   const handleChangePassword = async () => {
     setPwError(null);
@@ -148,6 +179,9 @@ export default function SettingsPage() {
 
         {settings && (
           <div className="space-y-6">
+            {/* Server status + storage manager */}
+            <ServerManager />
+
             {/* General */}
             <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6">
               <h2 className="text-sm font-semibold text-zinc-200">Recording storage</h2>
@@ -246,6 +280,13 @@ export default function SettingsPage() {
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-zinc-500">{cam.host}</span>
                     <button
+                      onClick={() => handleTestCamera(cam)}
+                      disabled={testing === cam.name}
+                      className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-400 transition-colors hover:border-emerald-700 hover:bg-emerald-950/40 hover:text-emerald-300 disabled:opacity-50"
+                    >
+                      {testing === cam.name ? "Testing…" : "Test connection"}
+                    </button>
+                    <button
                       onClick={() => handleDeleteCamera(cam.name)}
                       className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-400 transition-colors hover:border-red-900 hover:bg-red-950/40 hover:text-red-300"
                     >
@@ -253,6 +294,25 @@ export default function SettingsPage() {
                     </button>
                   </div>
                 </div>
+
+                {testResult && testResult.name === cam.name && (
+                  <div
+                    className={`mt-3 rounded-lg border px-4 py-2 text-sm ${
+                      testResult.ok
+                        ? "border-emerald-900/50 bg-emerald-950/40 text-emerald-300"
+                        : "border-red-900/50 bg-red-950/40 text-red-300"
+                    }`}
+                  >
+                    <div>{testResult.message}</div>
+                    {testResult.tips.length > 0 && (
+                      <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
+                        {testResult.tips.map((tip, i) => (
+                          <li key={i}>{tip}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
 
                 <div className="mt-5">
                   <div className="flex items-center justify-between">
