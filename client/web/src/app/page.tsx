@@ -18,6 +18,7 @@ export default function Home() {
   const [playing, setPlaying] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [category, setCategory] = useState<string>("all");
+  const [source, setSource] = useState<string>("all");
 
   useEffect(() => {
     if (!authenticated) return;
@@ -41,6 +42,14 @@ export default function Home() {
   const categories = Array.from(new Set(clips.map((c) => c.category))).sort();
   const filtered =
     category === "all" ? clips : clips.filter((c) => c.category === category);
+  const sourceFiltered =
+    source === "all"
+      ? filtered
+      : filtered.filter((c) =>
+          source === "manual"
+            ? c.recorded_by === "manual-live-record"
+            : c.recorded_by !== "manual-live-record",
+        );
 
   const handleDelete = async (clip: Clip) => {
     if (!confirm(`Delete clip from ${clip.camera}?`)) return;
@@ -49,6 +58,28 @@ export default function Home() {
       setClips((prev) => prev.filter((c) => c.filename !== clip.filename));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Delete failed");
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    if (clips.length === 0) return;
+    const count = filtered.length;
+    if (
+      !confirm(
+        `Delete ALL ${count} recording${count === 1 ? "" : "s"}?\n\nThis permanently removes every clip from your library and can't be undone.`,
+      )
+    ) {
+      return;
+    }
+    // Second confirmation for safety — this is destructive.
+    if (!confirm("Are you absolutely sure? This can't be undone.")) return;
+    try {
+      const res = await api.deleteAllClips();
+      setClips([]);
+      setError(null);
+      setReloadKey((k) => k + 1);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete all failed");
     }
   };
 
@@ -64,10 +95,19 @@ export default function Home() {
               Timeline
             </h1>
             <p className="mt-1 text-sm text-zinc-500">
-              {filtered.length} recorded clip{filtered.length === 1 ? "" : "s"}
+              {sourceFiltered.length} recorded clip{sourceFiltered.length === 1 ? "" : "s"}
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <select
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
+              className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 outline-none focus:border-emerald-500"
+            >
+              <option value="all">All recordings</option>
+              <option value="motion">Motion detected</option>
+              <option value="manual">Manually recorded</option>
+            </select>
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
@@ -87,6 +127,15 @@ export default function Home() {
               <Icon name="refresh" className="h-3.5 w-3.5" />
               Refresh
             </button>
+            {filtered.length > 0 && (
+              <button
+                onClick={handleDeleteAll}
+                className="flex items-center gap-1.5 rounded-lg border border-red-900/60 px-3 py-1.5 text-sm text-red-300 transition-colors hover:bg-red-950/40"
+              >
+                <Icon name="trash" className="h-3.5 w-3.5" />
+                Delete all
+              </button>
+            )}
           </div>
         </header>
 
@@ -102,13 +151,15 @@ export default function Home() {
               <div key={i} className="h-48 animate-pulse rounded-xl bg-zinc-900" />
             ))}
           </div>
-        ) : filtered.length === 0 ? (
+        ) : sourceFiltered.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-800 py-24 text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-900 text-zinc-500">
               <Icon name="film" className="h-8 w-8" />
             </div>
             <p className="mt-4 text-sm font-medium text-zinc-300">
-              {category === "all" ? "No recordings yet" : `No ${category} recordings`}
+              {category === "all" && source === "all"
+                ? "No recordings yet"
+                : "No matching recordings"}
             </p>
             <p className="mt-1 max-w-sm text-xs text-zinc-600">
               When your camera spots movement, the clip will show up here
@@ -122,7 +173,7 @@ export default function Home() {
             className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
           >
             <AnimatePresence>
-              {filtered.map((clip, i) => (
+              {sourceFiltered.map((clip, i) => (
                 <motion.div
                   key={clip.filename}
                   layout
@@ -190,6 +241,7 @@ function ClipCard({
             {clip.camera}
           </span>
           <div className="flex items-center gap-2">
+            <SourceBadge recordedBy={clip.recorded_by} />
             <CategoryBadge category={clip.category} />
             <MotionBadge score={clip.motion_score} />
           </div>
@@ -253,6 +305,22 @@ function CategoryBadge({ category }: { category: string }) {
   return (
     <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ${color}`}>
       {category}
+    </span>
+  );
+}
+
+function SourceBadge({ recordedBy }: { recordedBy: string }) {
+  const isManual = recordedBy === "manual-live-record";
+  return (
+    <span
+      className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+        isManual
+          ? "bg-violet-500/15 text-violet-300"
+          : "bg-emerald-500/15 text-emerald-300"
+      }`}
+    >
+      <Icon name={isManual ? "record" : "sparkles"} className="h-3 w-3" />
+      {isManual ? "Manual" : "Motion"}
     </span>
   );
 }

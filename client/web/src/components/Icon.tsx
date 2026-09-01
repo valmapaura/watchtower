@@ -7,6 +7,8 @@
  */
 const PATHS: Record<string, React.ReactNode> = {
   play: <path d="M8 5v14l11-7z" />,
+  record: <circle cx="12" cy="12" r="7" fill="currentColor" stroke="none" />,
+  stop: <rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" stroke="none" />,
   download: (
     <>
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />

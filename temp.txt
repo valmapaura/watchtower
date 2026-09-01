@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import Shell from "@/components/Shell";
@@ -14,6 +14,9 @@ export default function LivePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [saveDir, setSaveDir] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [saveDir, setSaveDir] = useState<string | null>(null);
@@ -39,40 +42,6 @@ export default function LivePage() {
       cancelled = true;
     };
   }, [authenticated]);
-
-  useEffect(() => {
-    if (!isRecording) return;
-    const interval = setInterval(() => {
-      setRecordingDuration((prev) => prev + 1);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [isRecording]);
-
-  const toggleRecording = async (cameraName: string) => {
-    setError(null);
-    if (isRecording) {
-      // Stop recording
-      try {
-        const res = await api.stopRecording(cameraName);
-        setIsRecording(false);
-        setRecordingDuration(0);
-        setSaveDir(`Saved ${Math.round(res.duration_s)}s clip to the library`);
-      } catch (e) {
-        setIsRecording(false);
-        setRecordingDuration(0);
-        setError(e instanceof Error ? e.message : "Couldn't stop recording");
-      }
-    } else {
-      // Start recording
-      try {
-        await api.startRecording(cameraName);
-        setIsRecording(true);
-        setRecordingDuration(0);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Couldn't start recording");
-      }
-    }
-  };
 
   return (
     <AuthGate>
@@ -142,7 +111,7 @@ export default function LivePage() {
             </div>
             {selected && (
               <div className="relative">
-                {/* MJPEG streams render in a plain <img> tag — no video element needed. */}
+                {/* MJPEG streams render in a plain <img> tag â€” no video element needed. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={api.liveStreamUrl(selected)}
@@ -156,18 +125,19 @@ export default function LivePage() {
                 >
                   <button
                     onClick={() => toggleRecording(selected!)}
+                    disabled={isRecording}
                     className={`flex items-center gap-1.5 rounded-lg border border-zinc-600 px-3 py-1.5 text-sm transition-colors hover:bg-zinc-700 ${
-                      isRecording ? "bg-red-500 text-white hover:bg-red-400" : "bg-emerald-500 text-zinc-950 hover:bg-emerald-400"
+                      isRecording ? "bg-red-500 text-white" : "bg-emerald-500 text-zinc-950 hover:bg-emerald-400"
                     }`}
                   >
                     <Icon
-                      name={isRecording ? "stop" : "record"}
+                      name={isRecording ? "square-pause" : "record"}
                       className="h-4 w-4"
                     />
-                    {isRecording ? "Stop" : "Record"}
+                    {isRecording ? "Recording..." : "Record"}
                   </button>
                   <span className="text-xs text-zinc-400">
-                    {isRecording ? `${recordingDuration}s elapsed` : saveDir ?? "Click to clip"}
+                    {isRecording ? `${recordingDuration}s elapsed` : "Click to clip"}
                   </span>
                 </div>
               </div>

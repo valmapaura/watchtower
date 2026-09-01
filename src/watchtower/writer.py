@@ -29,9 +29,13 @@ class ClipWriter(ABC):
 
 
 class OpenCvClipWriter(ClipWriter):
-    """Writes frames to an MP4 using OpenCV's VideoWriter."""
+    """Writes frames to an MP4 using OpenCV's VideoWriter.
 
-    _FOURCC = "mp4v"
+    Uses the H.264 (AVC) codec so clips play in browsers. Falls back to
+    MPEG-4 Part 2 (``mp4v``) if H.264 isn't available on this machine.
+    """
+
+    _FOURCC = "avc1"  # H.264 — plays in all browsers
 
     def __init__(self) -> None:
         try:
@@ -40,6 +44,7 @@ class OpenCvClipWriter(ClipWriter):
             raise RuntimeError("OpenCV is required for OpenCvClipWriter")
         self._cv2 = cv2
         self._writer = None
+        self._fourcc = self._FOURCC
 
     def open(self, path: Path, fps: float) -> None:
         self.close()
@@ -53,13 +58,25 @@ class OpenCvClipWriter(ClipWriter):
     def write(self, frame) -> None:
         if self._writer is None:
             h, w = frame.shape[:2]
+            fourcc = self._cv2.VideoWriter_fourcc(*self._fourcc)
             self._writer = self._cv2.VideoWriter(
                 str(self._path),
-                self._cv2.VideoWriter_fourcc(*self._FOURCC),
+                fourcc,
                 self._fps,
                 (w, h),
             )
-        if self._writer is not None:
+            # If H.264 isn't available, OpenCV silently fails to open the
+            # writer. Detect that and fall back to MPEG-4 Part 2.
+            if not self._writer.isOpened():
+                self._writer.release()
+                self._fourcc = "mp4v"
+                self._writer = self._cv2.VideoWriter(
+                    str(self._path),
+                    self._cv2.VideoWriter_fourcc(*self._fourcc),
+                    self._fps,
+                    (w, h),
+                )
+        if self._writer is not None and self._writer.isOpened():
             self._writer.write(frame)
 
     def close(self) -> None:

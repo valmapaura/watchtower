@@ -18,6 +18,7 @@ import json
 import os
 import secrets
 import shutil
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -71,6 +72,10 @@ class RecorderManager:
         """Signal the recorder thread to stop."""
         self._stop.set()
 
+    def is_running(self) -> bool:
+        """Return whether the recorder thread is currently alive."""
+        return self._thread is not None and self._thread.is_alive()
+
     def restart(self) -> None:
         """Restart the recorder (e.g. after settings change).
 
@@ -119,8 +124,10 @@ class RecorderManager:
                     category_of=self._category_of(detector),
                 )
                 while not stop.is_set():
-                    if not recorder.step():
-                        break
+                    # A None return from the source is a transient read
+                    # failure (auto-reconnect), NOT the end of the stream.
+                    # Keep looping so motion detection survives hiccups.
+                    recorder.step()
                 source.close()
             except Exception:
                 # A camera failing shouldn't kill the whole loop; log and move on.
@@ -368,6 +375,7 @@ class SettingsUpdate(BaseModel):
     retention_days: int | None = None
     max_storage_gb: float | None = None
     notifications_enabled: bool | None = None
+    output_dir: str | None = None
 
 
 class AutoStartRequest(BaseModel):
@@ -494,6 +502,7 @@ def create_app(
             "web_port": config.web_port,
             "output_dir": str(config.output_dir),
             "camera_count": len(config.cameras),
+            "recorder_running": recorder.is_running(),
         }
 
     @app.get("/storage", dependencies=[Depends(auth)])
@@ -596,7 +605,6 @@ def create_app(
     def list_clips() -> list[dict]:
         """Return metadata for every stored clip (oldest first)."""
         return [m.__dict__ for m in backend.list_metadata()]
-
     @app.get("/clips/{clip_id}/stream", dependencies=[Depends(auth)])
     def stream_clip(clip_id: str) -> FileResponse:
         """Serve a clip's MP4 with HTTP range support (enables seeking)."""
@@ -616,6 +624,18 @@ def create_app(
         backend.delete(path)
         return {"deleted": clip_id}
 
+    @app.delete("/clips", dependencies=[Depends(auth)])
+    def delete_all_clips() -> dict:
+        """Delete every stored clip and its manifest."""
+        deleted = 0
+        for path in backend.list():
+            try:
+                backend.delete(path)
+                deleted += 1
+            except Exception:
+                continue
+        return {"deleted": deleted}
+
     @app.get("/settings", dependencies=[Depends(auth)])
     def get_settings() -> dict:
         """Return editable settings. Passwords are never exposed."""
@@ -624,6 +644,7 @@ def create_app(
             "max_storage_gb": config.max_storage_gb,
             "notifications_enabled": config.notifications_enabled,
             "auto_start": _auto_start_status()["enabled"],
+            "output_dir": str(config.output_dir),
             "cameras": [
                 {
                     "name": c.name,
@@ -660,6 +681,27 @@ def create_app(
             raw["notifications_enabled"] = update.notifications_enabled
             config.notifications_enabled = update.notifications_enabled
 
+        new_output_dir = None
+        if update.output_dir is not None and update.output_dir.strip():
+            requested = Path(update.output_dir.strip()).expanduser()
+            # Make relative paths relative to the config file's folder.
+            if not requested.is_absolute():
+                requested = (config_path.parent / requested).resolve()
+            try:
+                requested.mkdir(parents=True, exist_ok=True)
+                # Verify it's actually writable before committing.
+                test_file = requested / ".watchtower_write_test"
+                test_file.touch()
+                test_file.unlink()
+            except (OSError, PermissionError) as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Can't write to that folder: {e}",
+                )
+            new_output_dir = str(requested)
+            raw["output_dir"] = new_output_dir
+            config.output_dir = new_output_dir
+
         if update.cameras is not None:
             # Merge by name so we never clobber passwords that live in config.json.
             by_name = {c.name: c for c in config.cameras}
@@ -693,6 +735,10 @@ def create_app(
 
         # Apply the notifications toggle immediately (no full restart needed).
         recorder.set_notifications(config.notifications_enabled)
+
+        # A new save folder needs a new storage backend + recorder restart.
+        if new_output_dir is not None:
+            backend.root = Path(new_output_dir)  # re-point the live backend
 
         # Settings changed — restart the recorder so it picks up new cameras
         # and detection settings.
@@ -753,9 +799,18 @@ def create_app(
         """Try to connect to a camera and report whether it works.
 
         Returns a friendly ``message`` and ``tips`` list on failure so the UI
-        can guide a non-technical user through troubleshooting.
+        can guide a non-technical user through troubleshooting. If the request
+        carries no credentials (e.g. the Settings page doesn't send them for
+        security), fall back to the stored ones for the matching camera.
         """
-        cam = Config._parse_camera(req.model_dump())
+        data = req.model_dump()
+        # Merge in stored credentials if the request didn't provide real ones.
+        if not data.get("password"):
+            existing = next((c for c in config.cameras if c.name == data["name"]), None)
+            if existing is not None:
+                data["username"] = existing.username
+                data["password"] = existing.password
+        cam = Config._parse_camera(data)
         ok, message, tips = _test_rtsp_connection(cam)
         return {"ok": ok, "message": message, "tips": tips}
 
@@ -808,6 +863,100 @@ def create_app(
         config.cameras = []
         recorder.restart()
         return {"deleted": len(config.cameras)}
+
+    # ---- Manual live recording (ffmpeg-based) ----
+    _recording_procs: dict[str, subprocess.Popen] = {}
+    _recording_started: dict[str, float] = {}
+    _recording_files: dict[str, str] = {}
+
+    def _ffmpeg_path() -> str | None:
+        """Locate ffmpeg: bundled with the app, or on PATH."""
+        import sys
+        # Bundled with packaged app
+        if getattr(sys, "frozen", False):
+            bundled = Path(sys.executable).parent / "ffmpeg.exe"
+            if bundled.exists():
+                return str(bundled)
+        # Bundled with camera tools in repo
+        repo_ffmpeg = Path(__file__).resolve().parents[2] / "installation" / "CAM720VmsTools" / "ffmpegExe" / "ffmpeg.exe"
+        if repo_ffmpeg.exists():
+            return str(repo_ffmpeg)
+        # On PATH
+        return shutil.which("ffmpeg")
+
+    @app.post("/record/{camera_name}/start", dependencies=[Depends(auth)])
+    def start_recording(camera_name: str) -> dict:
+        """Start recording the live stream to an MP4 file."""
+        if camera_name in _recording_procs and _recording_procs[camera_name].poll() is None:
+            raise HTTPException(status_code=409, detail="Already recording")
+        cam = next((c for c in config.cameras if c.name == camera_name), None)
+        if cam is None:
+            raise HTTPException(status_code=404, detail="Camera not found")
+        ffmpeg = _ffmpeg_path()
+        if not ffmpeg:
+            raise HTTPException(status_code=500, detail="ffmpeg not found")
+        out_dir = Path(config.output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        ts = time.strftime("%Y%m%d_%H%M%S")
+        out_file = out_dir / f"{camera_name}_{ts}.mp4"
+        proc = subprocess.Popen(
+            [ffmpeg, "-y", "-rtsp_transport", "tcp", "-i", cam.rtsp_url, "-c:v", "copy", "-an", str(out_file)],
+            stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        _recording_procs[camera_name] = proc
+        _recording_started[camera_name] = time.time()
+        _recording_files[camera_name] = str(out_file)
+        return {"ok": True, "camera": camera_name, "file": out_file.name}
+
+    @app.post("/record/{camera_name}/stop", dependencies=[Depends(auth)])
+    def stop_recording(camera_name: str) -> dict:
+        """Stop an active recording and report the saved clip."""
+        proc = _recording_procs.get(camera_name)
+        if proc is None or proc.poll() is not None:
+            _recording_procs.pop(camera_name, None)
+            raise HTTPException(status_code=404, detail="Not recording")
+        started = _recording_started.pop(camera_name, time.time())
+        duration = round(time.time() - started, 1)
+
+        # Ask ffmpeg to shut down GRACEFULLY. Sending "q" on stdin makes it
+        # finalize the MP4 (write the moov atom) so the file plays normally.
+        # terminatae()/kill() on Windows hard-kills it and leaves a corrupt file.
+        try:
+            proc.stdin.write(b"q")
+            proc.stdin.flush()
+            proc.stdin.close()
+        except Exception:
+            pass
+        try:
+            proc.wait(timeout=15)
+        except Exception:
+            proc.kill()
+            proc.wait(timeout=5)
+        _recording_procs.pop(camera_name, None)
+
+        # Write a manifest so the clip shows up in the library/timeline.
+        from datetime import datetime, timezone
+
+        out_file = Path(_recording_files.pop(camera_name, ""))
+        start_utc = datetime.fromtimestamp(started, tz=timezone.utc).isoformat(timespec="seconds")
+        metadata = ClipMetadata(
+            filename=out_file.name,
+            camera=camera_name,
+            start_utc=start_utc,
+            duration_s=duration,
+            recorded_by="manual-live-record",
+        )
+        if out_file.exists() and out_file.stat().st_size > 0:
+            backend.save(out_file, metadata)
+        return {"ok": True, "camera": camera_name, "duration_s": duration, "clip": out_file.name}
+
+    @app.get("/record/{camera_name}/status", dependencies=[Depends(auth)])
+    def recording_status(camera_name: str) -> dict:
+        """Return whether this camera is currently being recorded, and for how long."""
+        proc = _recording_procs.get(camera_name)
+        if proc is None or proc.poll() is not None:
+            return {"recording": False}
+        return {"recording": True, "duration_s": round(time.time() - _recording_started.get(camera_name, time.time()), 1)}
 
     return app
 
