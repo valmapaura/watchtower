@@ -9,6 +9,7 @@ import ServerManager from "@/components/ServerManager";
 import Accordion from "@/components/Accordion";
 import Icon from "@/components/Icon";
 import Spinner from "@/components/Spinner";
+import PageTransition from "@/components/PageTransition";
 import { useAuth } from "@/lib/auth";
 import { api, type CameraSettings, type Settings } from "@/lib/api";
 
@@ -162,6 +163,7 @@ export default function SettingsPage() {
   return (
     <AuthGate>
       <Shell>
+        <PageTransition>
         <div className="mx-auto max-w-3xl px-4 py-6 sm:px-8 sm:py-8">
         <header className="mb-6 sm:mb-8">
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
@@ -585,6 +587,7 @@ export default function SettingsPage() {
           }}
         />
       )}
+        </PageTransition>
       </Shell>
     </AuthGate>
   );

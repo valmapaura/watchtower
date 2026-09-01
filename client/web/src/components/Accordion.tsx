@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import Icon from "@/components/Icon";
 
 /**
  * A collapsible section. Keeps advanced/optional settings hidden by default
  * so the main view stays clean and obvious for new users. Clicking the header
- * expands or collapses it.
+ * expands or collapses it with a smooth animation.
  */
 export default function Accordion({
   title,
@@ -40,14 +41,28 @@ export default function Accordion({
             </span>
           )}
         </span>
-        <Icon
-          name="chevronDown"
-          className={`h-4 w-4 shrink-0 text-zinc-500 transition-transform duration-200 ${
-            open ? "rotate-180" : ""
-          }`}
-        />
+        <motion.span
+          animate={{ rotate: open ? 180 : 0 }}
+          transition={{ duration: 0.2 }}
+          className="shrink-0 text-zinc-500"
+        >
+          <Icon name="chevronDown" className="h-4 w-4" />
+        </motion.span>
       </button>
-      {open && <div className="border-t border-zinc-800 px-5 py-4">{children}</div>}
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            key="content"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25, ease: "easeInOut" }}
+            className="overflow-hidden"
+          >
+            <div className="border-t border-zinc-800 px-5 py-4">{children}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

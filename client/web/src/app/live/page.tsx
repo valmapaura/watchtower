@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Shell from "@/components/Shell";
 import AuthGate from "@/components/AuthGate";
 import Icon from "@/components/Icon";
+import PageTransition from "@/components/PageTransition";
 import { useAuth } from "@/lib/auth";
 import { api, type LiveCamera } from "@/lib/api";
 
@@ -39,6 +40,7 @@ export default function LivePage() {
   return (
     <AuthGate>
       <Shell>
+        <PageTransition>
         <div className="mx-auto max-w-6xl px-4 py-6 sm:px-8 sm:py-8">
         <header className="mb-6 flex flex-col gap-3 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -113,6 +115,7 @@ export default function LivePage() {
           </div>
         )}
       </div>
+        </PageTransition>
       </Shell>
     </AuthGate>
   );

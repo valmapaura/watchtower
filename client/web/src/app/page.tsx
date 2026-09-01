@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import Shell from "@/components/Shell";
 import AuthGate from "@/components/AuthGate";
 import Icon from "@/components/Icon";
+import PageTransition from "@/components/PageTransition";
 import { useAuth } from "@/lib/auth";
 import { api, type Clip } from "@/lib/api";
 import { formatDate, formatDuration, motionLabel } from "@/lib/format";
@@ -53,6 +55,7 @@ export default function Home() {
   return (
     <AuthGate>
       <Shell>
+        <PageTransition>
         <div className="mx-auto max-w-6xl px-4 py-6 sm:px-8 sm:py-8">
         <header className="mb-6 flex flex-col gap-3 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -114,19 +117,33 @@ export default function Home() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((clip) => (
-              <ClipCard
-                key={clip.filename}
-                clip={clip}
-                playing={playing === clip.filename}
-                onPlay={() => setPlaying(clip.filename)}
-                onDelete={() => handleDelete(clip)}
-              />
-            ))}
-          </div>
+          <motion.div
+            layout
+            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+          >
+            <AnimatePresence>
+              {filtered.map((clip, i) => (
+                <motion.div
+                  key={clip.filename}
+                  layout
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.25, delay: i * 0.04 }}
+                >
+                  <ClipCard
+                    clip={clip}
+                    playing={playing === clip.filename}
+                    onPlay={() => setPlaying(clip.filename)}
+                    onDelete={() => handleDelete(clip)}
+                  />
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </motion.div>
         )}
       </div>
+        </PageTransition>
       </Shell>
     </AuthGate>
   );

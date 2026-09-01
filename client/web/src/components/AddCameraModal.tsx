@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { motion } from "motion/react";
 import { api } from "@/lib/api";
 import BouncingDots from "@/components/BouncingDots";
 import Icon from "@/components/Icon";
@@ -105,7 +106,13 @@ export default function AddCameraModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-xl">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+        transition={{ duration: 0.2, ease: "easeOut" }}
+        className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-xl"
+      >
         <div className="flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
             <Icon name="camera" className="h-5 w-5 text-emerald-400" />
@@ -229,7 +236,7 @@ export default function AddCameraModal({
             </button>
           )}
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
