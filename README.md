@@ -21,25 +21,36 @@ audio). This repo's original dev hardware was a generic APCam WiFi camera — se
 ## 🧰 What's inside
 
 ```
-cam720/                  (repo root — rename to watchtower/ if you like)
-├── README.md                  ← you are here
-├── config.json                ← your real credentials (git-ignored)
-├── config.example.json        ← template with placeholders
-├── requirements.txt           ← Python deps (opencv-python)
-├── Capture-Stream.ps1         ← record the RTSP stream to MP4 (video + optional AAC audio)
-├── Camera-Limit-Tester.ps1    ← test how many concurrent streams the camera handles
+cam720/                     (repo root — rename to watchtower/ if you like)
+├── README.md                   ← you are here
+├── config.json                 ← your real credentials (git-ignored)
+├── config.example.json         ← template with placeholders
+├── requirements.txt            ← Python deps (opencv-python)
+├── Capture-Stream.ps1          ← record the RTSP stream to MP4 (video + optional AAC audio)
+├── Camera-Limit-Tester.ps1     ← test how many concurrent streams the camera handles
+├── client/
+│   ├── web/                    ← Next.js UI (Timeline, Live, Settings)
+│   │   └── src/
+│   │       ├── app/            ← pages (page.tsx, live, settings)
+│   │       ├── components/     ← Shell, AuthGate, Accordion, modals…
+│   │       └── lib/            ← api client, auth, formatters
+│   └── desktop/                ← Electron shell + PyInstaller package
+│       ├── main.js             ← Electron main process (starts backend too)
+│       ├── watchtower-backend.spec
+│       └── dist/               ← built artifacts
+│           └── "Watchtower Setup 0.1.0.exe"   ← the installer
 ├── docs/
-│   ├── PROJECT.md             ← vision, design principles, modular architecture
-│   ├── ROADMAP.md             ← phased plan: local disk → cloud → browser UI → Android
-│   ├── camera-specs.md        ← test-camera hardware/firmware/network facts
-│   └── access-guide.md        ← how to log in, admin panel, RTSP, troubleshooting
+│   ├── PROJECT.md              ← vision, design principles, modular architecture
+│   ├── ROADMAP.md              ← phased plan: local disk → cloud → browser UI → Android
+│   ├── camera-specs.md         ← test-camera hardware/firmware/network facts
+│   └── access-guide.md         ← how to log in, admin panel, RTSP, troubleshooting
 ├── scripts/
-│   ├── check-camera.ps1       ← health check: ping, ports, RTSP server
-│   └── open-in-vlc.ps1        ← opens the live stream in VLC
+│   ├── check-camera.ps1        ← health check: ping, ports, RTSP server
+│   └── open-in-vlc.ps1         ← opens the live stream in VLC
 └── src/
-    ├── watchtower/            ← the recorder package (detector, recorder, storage)
-    ├── cam_viewer.py          ← live RTSP viewer (OpenCV) with snapshots
-    └── rtsp_digest_probe.py   ← pure-Python RTSP digest-auth explorer
+    ├── watchtower/             ← the recorder package (detector, recorder, storage, api)
+    ├── cam_viewer.py           ← live RTSP viewer (OpenCV) with snapshots
+    └── rtsp_digest_probe.py    ← pure-Python RTSP digest-auth explorer
 ```
 
 ## 🎥 Motion recorder (Phase 1)
@@ -49,7 +60,7 @@ seen, and continues **5‑s after** motion stops. Pure Python + OpenCV, modular.
 
 ```bash
 pip install -e .          # install the package (editable)
-python -m pytest          # run the test suite (60 tests)
+python -m pytest          # run the test suite (70+ tests)
 
 # Run continuously against the camera(s) in config.json
 python -m watchtower.main --config config.json
@@ -117,8 +128,14 @@ python -m watchtower.api --config config.json --host 0.0.0.0   # expose on LAN
 | `GET /clips/{id}/stream`   | Stream the MP4 (HTTP range → seeking works)         |
 | `GET /clips/{id}/download` | Download the clip as an attachment                  |
 | `DELETE /clips/{id}`       | Delete a clip + its manifest                        |
+| `DELETE /clips`            | Delete **all** clips                                |
 | `GET /live`                | List cameras available for live viewing             |
 | `GET /live/{name}/stream`  | Live MJPEG stream (browser-playable via `<img>`)    |
+| `GET /camera/test`         | Test a camera connection (credentials/stream)       |
+
+**Auth:** the UI uses a password-protected login (cookie session). The API also
+accepts a bearer token — set `"api_token"` in `config.json` to require one on every
+request. Leave it empty (`""`) for an open API — fine when bound to localhost only.
 
 **Auth:** set `"api_token"` in `config.json` to require a bearer token on every
 request. Leave it empty (`""`) for an open API — fine when bound to localhost only.
@@ -151,7 +168,51 @@ automatically at startup/login:
 
 Files are written to `.\recordings\cam_<timestamp>.mp4`.
 
-## 🚀 Quick start
+## �️ Web client (Next.js UI)
+
+A browser client that talks to the FastAPI backend. It never touches the camera
+directly — it reads the clip library and streams files from the API.
+
+- **Timeline** — browse recorded clips; filter by category and by source
+  (motion-detected vs. manual); play streams inline; **download**, **delete**,
+  or **delete all**.
+- **Live** — watch cameras in real time and start a **manual recording** that is
+  saved like any other clip.
+- **Settings** — retention, storage cap, notifications, and per-camera motion
+  tuning (sensitivity, pre/post seconds, detector + categories).
+
+```bash
+cd client/web
+npm install
+npm run dev:all        # dev server + backend
+npm run build          # static export to client/web/out
+```
+
+## 💿 Desktop app (Electron)
+
+The whole thing — backend binary + web UI — ships as a single Windows installer.
+
+```bash
+cd client/desktop
+npm install
+npm run dist           # 1) build web UI  2) PyInstaller backend  3) electron-builder
+```
+
+The installer is produced as **`client/desktop/dist/Watchtower Setup 0.1.0.exe`**.
+It bundles:
+
+- `watchtower-backend.exe` (everything the Python pack needs, no Python install)
+- the static web UI
+- the Electron shell that launches the backend and opens the UI
+
+### How it works
+
+1. Electron starts, spawns `watchtower-backend.exe` (FastAPI on localhost).
+2. The UI loads from the bundled static export and connects to the API.
+3. Clips, settings, and recordings persist under
+   `%APPDATA%\Watchtower` (see [Storage limits](#-storage-limits)).
+
+## �🚀 Quick start
 
 **Watch the live stream in VLC**
 
@@ -187,11 +248,42 @@ python src/cam_viewer.py
 python src/rtsp_digest_probe.py
 ```
 
+## 🧪 Testing
+
+```bash
+python -m pytest                    # full suite (unit + integration)
+python -m pytest tests/unit         # unit tests only
+python -m pytest -q                 # quiet run
+```
+
+The suite covers the recorder (motion detection, FPS, clip saving), the storage
+backend (save / list / delete / cleanup), the API layer, and the detector.
+
+Known gaps — the **desktop app needs more extensive smoke tests**:
+
+- Start the installed `.exe` and confirm the backend comes up and `/health` returns `ok`.
+- Create a manual recording from the Live tab and confirm it appears on the Timeline.
+- Trigger motion and confirm a motion-gated clip appears with an accurate speed.
+- Verify delete + delete-all, the filters, and that settings persist after restart.
+
 ## ⚠️ Notes
 
 - This is a **local-LAN** hobby project. The camera's web UI and RTSP use **plain HTTP / MD5 digest** — don't expose them to the internet, and don't reuse a valuable password.
 - The camera's SoC **rate-limits** after bursts of requests — if something hangs, wait 2–3 minutes.
 - Cloud app account (email + password) ≠ local device password. The web UI / RTSP use the **device** password in `config.json`.
+
+## 🎯 Achievements (latest)
+
+- **Accurate playback speed** — clip FPS is now measured from real frame-arrival
+  timestamps, so motion clips play at real time (previously ~1.6× fast).
+- **Delete all** — new `DELETE /clips` endpoint + Timeline button (double-confirm).
+- **Camera test** — the backend now falls back to stored camera credentials, so
+  testing works even when the UI hasn't typed passwords yet.
+- **Clean clip badges** — the redundant generic `motion` category label is gone;
+  cards show `Manual`/`Motion`, a real object category (person/vehicle/animal), and
+  a motion-intensity badge (`Low`/`Medium`/`High`) only when motion was detected.
+- **Desktop installer** — full Electron + PyInstaller packaging produces
+  `Watchtower Setup 0.1.0.exe`.
 
 ## 🔒 Privacy
 
