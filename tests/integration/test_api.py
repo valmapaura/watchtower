@@ -317,3 +317,31 @@ def test_test_camera_returns_tips_on_failure(tmp_path):
     assert body["ok"] is False
     assert isinstance(body["tips"], list)
     assert len(body["tips"]) > 0
+
+
+def test_delete_camera_persists(tmp_path):
+    cfg_path = _write_config(tmp_path)
+    cfg = Config.from_file(cfg_path)
+    client = TestClient(create_app(cfg, config_path=cfg_path))
+    resp = client.delete("/camera/cam")
+    assert resp.status_code == 200
+    saved = json.loads(cfg_path.read_text(encoding="utf-8"))
+    assert saved["cameras"] == []
+
+
+def test_delete_camera_unknown_404(tmp_path):
+    cfg_path = _write_config(tmp_path)
+    cfg = Config.from_file(cfg_path)
+    client = TestClient(create_app(cfg, config_path=cfg_path))
+    resp = client.delete("/camera/nope")
+    assert resp.status_code == 404
+
+
+def test_clear_cameras(tmp_path):
+    cfg_path = _write_config(tmp_path)
+    cfg = Config.from_file(cfg_path)
+    client = TestClient(create_app(cfg, config_path=cfg_path))
+    resp = client.delete("/cameras")
+    assert resp.status_code == 200
+    saved = json.loads(cfg_path.read_text(encoding="utf-8"))
+    assert saved["cameras"] == []

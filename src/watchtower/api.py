@@ -371,6 +371,35 @@ def create_app(
         config.cameras = [Config._parse_camera(c) for c in cameras]
         return {"ok": True, "name": req.name}
 
+    @app.delete("/camera/{camera_name}", dependencies=[Depends(auth)])
+    def delete_camera(camera_name: str) -> dict:
+        """Remove a camera from config.json (persisted)."""
+        if config_path is None:
+            raise HTTPException(status_code=400, detail="Settings persistence is disabled")
+
+        raw = json.loads(config_path.read_text(encoding="utf-8"))
+        cameras = raw.get("cameras", [])
+        remaining = [c for c in cameras if c.get("name") != camera_name]
+        if len(remaining) == len(cameras):
+            raise HTTPException(status_code=404, detail="Camera not found")
+
+        raw["cameras"] = remaining
+        config_path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+        config.cameras = [Config._parse_camera(c) for c in remaining]
+        return {"deleted": camera_name}
+
+    @app.delete("/cameras", dependencies=[Depends(auth)])
+    def clear_cameras() -> dict:
+        """Remove all cameras from config.json (persisted)."""
+        if config_path is None:
+            raise HTTPException(status_code=400, detail="Settings persistence is disabled")
+
+        raw = json.loads(config_path.read_text(encoding="utf-8"))
+        raw["cameras"] = []
+        config_path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+        config.cameras = []
+        return {"deleted": len(config.cameras)}
+
     return app
 
 

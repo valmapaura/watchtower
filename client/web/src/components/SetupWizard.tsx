@@ -198,13 +198,13 @@ export default function SetupWizard({ onDone }: { onDone: () => void }) {
                   <button
                     onClick={handleTest}
                     disabled={testing}
-                    className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 transition-colors hover:bg-emerald-400 disabled:opacity-50"
+                    className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                      testing
+                        ? "border border-emerald-500/60 bg-transparent text-emerald-300"
+                        : "bg-emerald-500 text-zinc-950 hover:bg-emerald-400"
+                    }`}
                   >
-                    {testing ? (
-                      <BouncingDots label="Testing connection" />
-                    ) : (
-                      "Test connection"
-                    )}
+                    {testing ? <BouncingDots /> : "Test connection"}
                   </button>
                 )}
               </div>

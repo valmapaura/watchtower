@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Shell from "@/components/Shell";
 import AuthGate from "@/components/AuthGate";
 import InfoTip from "@/components/InfoTip";
+import AddCameraModal from "@/components/AddCameraModal";
 import { useAuth } from "@/lib/auth";
 import { api, type CameraSettings, type Settings } from "@/lib/api";
 
@@ -13,6 +14,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAddCamera, setShowAddCamera] = useState(false);
   const [saved, setSaved] = useState(false);
   const [pwCurrent, setPwCurrent] = useState("");
   const [pwNew, setPwNew] = useState("");
@@ -30,6 +32,34 @@ export default function SettingsPage() {
       setTimeout(() => setPwSaved(false), 2500);
     } catch (e) {
       setPwError(e instanceof Error ? e.message : "Couldn't change password");
+    }
+  };
+
+  const reload = async () => {
+    try {
+      setSettings(await api.getSettings());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load settings");
+    }
+  };
+
+  const handleDeleteCamera = async (name: string) => {
+    if (!confirm(`Remove ${name}? Its recordings stay on disk.`)) return;
+    try {
+      await api.deleteCamera(name);
+      await reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't remove camera");
+    }
+  };
+
+  const handleClearCameras = async () => {
+    if (!confirm("Remove ALL cameras? This can't be undone.")) return;
+    try {
+      await api.clearCameras();
+      await reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't clear cameras");
     }
   };
 
@@ -184,6 +214,28 @@ export default function SettingsPage() {
             </section>
 
             {/* Cameras */}
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-zinc-200">
+                Cameras ({settings.cameras.length})
+              </h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowAddCamera(true)}
+                  className="rounded-lg bg-emerald-500 px-3 py-1.5 text-sm font-medium text-zinc-950 transition-colors hover:bg-emerald-400"
+                >
+                  + Add camera
+                </button>
+                {settings.cameras.length > 0 && (
+                  <button
+                    onClick={handleClearCameras}
+                    className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-400 transition-colors hover:border-red-900 hover:bg-red-950/40 hover:text-red-300"
+                  >
+                    Remove all
+                  </button>
+                )}
+              </div>
+            </div>
+
             {settings.cameras.map((cam, i) => (
               <section
                 key={cam.name}
@@ -191,7 +243,15 @@ export default function SettingsPage() {
               >
                 <div className="flex items-center justify-between">
                   <h2 className="text-sm font-semibold text-zinc-200">{cam.name}</h2>
-                  <span className="text-xs text-zinc-500">{cam.host}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-zinc-500">{cam.host}</span>
+                    <button
+                      onClick={() => handleDeleteCamera(cam.name)}
+                      className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-400 transition-colors hover:border-red-900 hover:bg-red-950/40 hover:text-red-300"
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </div>
 
                 <div className="mt-5">
@@ -417,6 +477,15 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+      {showAddCamera && (
+        <AddCameraModal
+          onClose={() => setShowAddCamera(false)}
+          onAdded={() => {
+            setShowAddCamera(false);
+            reload();
+          }}
+        />
+      )}
       </Shell>
     </AuthGate>
   );
