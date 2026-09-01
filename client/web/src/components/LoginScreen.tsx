@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
+import Icon from "@/components/Icon";
+import Spinner from "@/components/Spinner";
 
 export default function LoginScreen() {
   const { login } = useAuth();
@@ -27,7 +29,7 @@ export default function LoginScreen() {
       <div className="w-full max-w-sm">
         <div className="flex justify-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-400">
-            <span className="text-xl">◉</span>
+            <Icon name="camera" className="h-7 w-7" />
           </div>
         </div>
         <h1 className="mt-5 text-center text-2xl font-semibold tracking-tight">
@@ -57,9 +59,13 @@ export default function LoginScreen() {
           <button
             type="submit"
             disabled={busy || !password}
-            className="w-full rounded-lg bg-emerald-500 px-5 py-2 text-sm font-medium text-zinc-950 transition-colors hover:bg-emerald-400 disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-500 px-5 py-2 text-sm font-medium text-zinc-950 transition-colors hover:bg-emerald-400 disabled:opacity-50"
           >
-            {busy ? "Signing in…" : "Sign in"}
+            {busy ? (
+              <Spinner className="h-4 w-4 text-zinc-950" label="Signing in…" />
+            ) : (
+              "Sign in"
+            )}
           </button>
         </form>
       </div>

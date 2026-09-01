@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { api } from "@/lib/api";
 import BouncingDots from "@/components/BouncingDots";
+import Icon from "@/components/Icon";
+import InfoTip from "@/components/InfoTip";
 
 interface ParsedCamera {
   host: string;
@@ -105,17 +107,25 @@ export default function AddCameraModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-xl">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-tight">Add a camera</h2>
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+            <Icon name="camera" className="h-5 w-5 text-emerald-400" />
+            Add a camera
+          </h2>
           <button
             onClick={onClose}
             aria-label="Close"
             className="rounded-lg px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
           >
-            ✕
+            <Icon name="x" className="h-4 w-4" />
           </button>
         </div>
         <p className="mt-1 text-sm text-zinc-500">
           Paste the stream link from your camera&apos;s app or manual.
+          <InfoTip title="Where do I find this?">
+            Look for a &quot;stream link&quot;, &quot;RTSP URL&quot;, or
+            &quot;media URL&quot; in your camera&apos;s app or manual. It starts
+            with <code>rtsp://</code>.
+          </InfoTip>
         </p>
 
         <div className="mt-4">
@@ -138,7 +148,8 @@ export default function AddCameraModal({
               onChange={(e) => setName(e.target.value)}
               className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-emerald-500"
             />
-            <p className="mt-2 text-xs text-zinc-500">
+            <p className="mt-2 flex items-center gap-1.5 text-xs text-zinc-500">
+              <Icon name="check" className="h-3 w-3 text-emerald-400" />
               Found: <span className="text-zinc-300">{parsed.host}</span>
             </p>
           </div>
@@ -158,7 +169,10 @@ export default function AddCameraModal({
                 : "border-amber-900/50 bg-amber-950/40 text-amber-300"
             }`}
           >
-            <p>{testResult.message}</p>
+            <p className="flex items-center gap-1.5">
+              <Icon name={testResult.ok ? "check" : "help"} className="h-4 w-4" />
+              {testResult.message}
+            </p>
             {!testResult.ok && testResult.tips.length > 0 && (
               <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-amber-200/80">
                 {testResult.tips.map((tip, i) => (
@@ -169,34 +183,49 @@ export default function AddCameraModal({
           </div>
         )}
 
-        <div className="mt-6 flex gap-3">
+        <div className="mt-6 flex flex-wrap gap-3">
           <button
             onClick={handleParse}
             disabled={!link}
-            className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-800 disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-800 disabled:opacity-50"
           >
+            <Icon name="arrowRight" className="h-4 w-4" />
             Read link
           </button>
           {parsed && (
             <button
               onClick={handleTest}
               disabled={testing}
-              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                 testing
                   ? "border border-emerald-500/60 bg-transparent text-emerald-300"
                   : "bg-emerald-500 text-zinc-950 hover:bg-emerald-400"
               }`}
             >
-              {testing ? <BouncingDots /> : "Test connection"}
+              {testing ? (
+                <BouncingDots />
+              ) : (
+                <>
+                  <Icon name="wifi" className="h-4 w-4" />
+                  Test connection
+                </>
+              )}
             </button>
           )}
           {testResult?.ok && (
             <button
               onClick={handleAdd}
               disabled={busy}
-              className="ml-auto rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 transition-colors hover:bg-emerald-400 disabled:opacity-50"
+              className="ml-auto flex items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 transition-colors hover:bg-emerald-400 disabled:opacity-50"
             >
-              {busy ? "Adding…" : "Add camera"}
+              {busy ? (
+                <BouncingDots />
+              ) : (
+                <>
+                  Add camera
+                  <Icon name="arrowRight" className="h-4 w-4" />
+                </>
+              )}
             </button>
           )}
         </div>

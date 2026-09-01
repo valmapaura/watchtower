@@ -6,6 +6,9 @@ import AuthGate from "@/components/AuthGate";
 import InfoTip from "@/components/InfoTip";
 import AddCameraModal from "@/components/AddCameraModal";
 import ServerManager from "@/components/ServerManager";
+import Accordion from "@/components/Accordion";
+import Icon from "@/components/Icon";
+import Spinner from "@/components/Spinner";
 import { useAuth } from "@/lib/auth";
 import { api, type CameraSettings, type Settings } from "@/lib/api";
 
@@ -161,11 +164,14 @@ export default function SettingsPage() {
       <Shell>
         <div className="mx-auto max-w-3xl px-4 py-6 sm:px-8 sm:py-8">
         <header className="mb-6 sm:mb-8">
-          <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+            <Icon name="settings" className="h-6 w-6 text-emerald-400" />
+            Settings
+          </h1>
           <p className="mt-1 text-sm text-zinc-500">
             Tune how your cameras record. Tap the{" "}
-            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-zinc-700/60 text-[10px] font-semibold text-zinc-300">
-              ?
+            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-zinc-700/60 text-zinc-300">
+              <Icon name="help" className="h-3 w-3" />
             </span>{" "}
             icons to learn what each option does.
           </p>
@@ -183,9 +189,11 @@ export default function SettingsPage() {
             <ServerManager />
 
             {/* General */}
-            <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6">
-              <h2 className="text-sm font-semibold text-zinc-200">Recording storage</h2>
-              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Accordion
+              title="Recording storage"
+              icon={<Icon name="hardDrive" className="h-4 w-4" />}
+            >
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Keep recordings for (days)">
                   <input
                     type="number"
@@ -236,7 +244,8 @@ export default function SettingsPage() {
                       }
                       className="h-4 w-4 accent-emerald-500"
                     />
-                    <span className="text-sm text-zinc-400">
+                    <span className="flex items-center gap-1.5 text-sm text-zinc-400">
+                      <Icon name="bell" className="h-4 w-4 text-zinc-500" />
                       Send me a notification
                     </span>
                   </label>
@@ -245,19 +254,21 @@ export default function SettingsPage() {
                   </InfoTip>
                 </Field>
               </div>
-            </section>
+            </Accordion>
 
             {/* Cameras */}
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-zinc-200">
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-200">
+                <Icon name="camera" className="h-4 w-4 text-emerald-400" />
                 Cameras ({settings.cameras.length})
               </h2>
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowAddCamera(true)}
-                  className="rounded-lg bg-emerald-500 px-3 py-1.5 text-sm font-medium text-zinc-950 transition-colors hover:bg-emerald-400"
+                  className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-sm font-medium text-zinc-950 transition-colors hover:bg-emerald-400"
                 >
-                  + Add camera
+                  <Icon name="plus" className="h-4 w-4" />
+                  Add camera
                 </button>
                 {settings.cameras.length > 0 && (
                   <button
@@ -276,20 +287,31 @@ export default function SettingsPage() {
                 className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6"
               >
                 <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-zinc-200">{cam.name}</h2>
+                  <h2 className="flex items-center gap-1.5 text-sm font-semibold text-zinc-200">
+                    <Icon name="camera" className="h-4 w-4 text-emerald-400" />
+                    {cam.name}
+                  </h2>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-zinc-500">{cam.host}</span>
                     <button
                       onClick={() => handleTestCamera(cam)}
                       disabled={testing === cam.name}
-                      className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-400 transition-colors hover:border-emerald-700 hover:bg-emerald-950/40 hover:text-emerald-300 disabled:opacity-50"
+                      className="flex items-center gap-1 rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-400 transition-colors hover:border-emerald-700 hover:bg-emerald-950/40 hover:text-emerald-300 disabled:opacity-50"
                     >
-                      {testing === cam.name ? "Testing…" : "Test connection"}
+                      {testing === cam.name ? (
+                        <Spinner className="h-3 w-3" label="Testing…" />
+                      ) : (
+                        <>
+                          <Icon name="wifi" className="h-3.5 w-3.5" />
+                          Test connection
+                        </>
+                      )}
                     </button>
                     <button
                       onClick={() => handleDeleteCamera(cam.name)}
-                      className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-400 transition-colors hover:border-red-900 hover:bg-red-950/40 hover:text-red-300"
+                      className="flex items-center gap-1 rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-400 transition-colors hover:border-red-900 hover:bg-red-950/40 hover:text-red-300"
                     >
+                      <Icon name="trash" className="h-3.5 w-3.5" />
                       Remove
                     </button>
                   </div>
@@ -303,7 +325,10 @@ export default function SettingsPage() {
                         : "border-red-900/50 bg-red-950/40 text-red-300"
                     }`}
                   >
-                    <div>{testResult.message}</div>
+                    <div className="flex items-center gap-1.5">
+                      <Icon name={testResult.ok ? "check" : "help"} className="h-4 w-4" />
+                      {testResult.message}
+                    </div>
                     {testResult.tips.length > 0 && (
                       <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
                         {testResult.tips.map((tip, i) => (
@@ -480,11 +505,11 @@ export default function SettingsPage() {
             ))}
 
             {/* Change password */}
-            <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6">
-              <h2 className="text-sm font-semibold text-zinc-200">
-                Change app password
-              </h2>
-              <p className="mt-1 text-xs text-zinc-500">
+            <Accordion
+              title="Change app password"
+              icon={<Icon name="key" className="h-4 w-4" />}
+            >
+              <p className="text-xs text-zinc-500">
                 The password you use to sign in to Watchtower.
               </p>
               <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -511,28 +536,42 @@ export default function SettingsPage() {
                 </div>
               )}
               {pwSaved && (
-                <div className="mt-3 rounded-lg border border-emerald-900/50 bg-emerald-950/40 px-4 py-2 text-sm text-emerald-300">
-                  Password updated ✓
+                <div className="mt-3 flex items-center gap-1.5 rounded-lg border border-emerald-900/50 bg-emerald-950/40 px-4 py-2 text-sm text-emerald-300">
+                  <Icon name="check" className="h-4 w-4" />
+                  Password updated
                 </div>
               )}
               <button
                 onClick={handleChangePassword}
                 disabled={!pwNew}
-                className="mt-4 rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-800 disabled:opacity-50"
+                className="mt-4 flex items-center gap-1.5 rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-800 disabled:opacity-50"
               >
+                <Icon name="key" className="h-4 w-4" />
                 Update password
               </button>
-            </section>
+            </Accordion>
 
             <div className="flex items-center gap-4">
               <button
                 onClick={save}
                 disabled={saving}
-                className="rounded-lg bg-emerald-500 px-5 py-2 text-sm font-medium text-zinc-950 transition-colors hover:bg-emerald-400 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-emerald-500 px-5 py-2 text-sm font-medium text-zinc-950 transition-colors hover:bg-emerald-400 disabled:opacity-50"
               >
-                {saving ? "Saving…" : "Save changes"}
+                {saving ? (
+                  <Spinner className="h-4 w-4 text-zinc-950" label="Saving…" />
+                ) : (
+                  <>
+                    <Icon name="check" className="h-4 w-4" />
+                    Save changes
+                  </>
+                )}
               </button>
-              {saved && <span className="text-sm text-emerald-400">Saved ✓</span>}
+              {saved && (
+                <span className="flex items-center gap-1.5 text-sm text-emerald-400">
+                  <Icon name="check" className="h-4 w-4" />
+                  Saved
+                </span>
+              )}
             </div>
           </div>
         )}

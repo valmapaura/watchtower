@@ -4,12 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import BackendStatus from "@/components/BackendStatus";
+import Icon from "@/components/Icon";
 
 const NAV = [
-  { href: "/", label: "Timeline", icon: "▦" },
-  { href: "/live", label: "Live", icon: "◉" },
-  { href: "/settings", label: "Settings", icon: "⚙" },
-];
+  { href: "/", label: "Timeline", icon: "timeline" },
+  { href: "/live", label: "Live", icon: "live" },
+  { href: "/settings", label: "Settings", icon: "settings" },
+] as const;
 
 export default function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -19,9 +20,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen flex-col lg:flex-row">
       {/* Top bar on mobile, sidebar on desktop */}
       <aside className="flex shrink-0 flex-col border-b border-zinc-800 bg-zinc-900/60 lg:w-56 lg:border-b-0 lg:border-r">
-        <div className="flex items-center gap-2 px-4 py-4 lg:px-5 lg:py-5">
+        <div className="flex items-center gap-2.5 px-4 py-4 lg:px-5 lg:py-5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400">
-            <span className="text-sm">◉</span>
+            <Icon name="camera" className="h-4 w-4" />
           </div>
           <div>
             <div className="text-sm font-semibold tracking-tight">Watchtower</div>
@@ -37,22 +38,22 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+                className={`flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ${
                   active
                     ? "bg-zinc-800 text-zinc-50"
                     : "text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200"
                 }`}
               >
-                <span className="w-4 text-center">{item.icon}</span>
+                <Icon name={item.icon} className="h-4 w-4" />
                 {item.label}
               </Link>
             );
           })}
           <button
             onClick={logout}
-            className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800/60 hover:text-zinc-200 lg:underline lg:underline-offset-4"
+            className="flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800/60 hover:text-zinc-200 lg:underline lg:underline-offset-4"
           >
-            <span className="w-4 text-center">⎋</span>
+            <Icon name="logout" className="h-4 w-4" />
             Log out
           </button>
         </nav>

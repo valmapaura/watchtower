@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type ServerStatus, type StorageInfo } from "@/lib/api";
 import InfoTip from "@/components/InfoTip";
+import Icon from "@/components/Icon";
+import Spinner from "@/components/Spinner";
 
 function formatBytes(bytes: number): string {
   if (bytes <= 0) return "0 B";
@@ -107,7 +109,10 @@ export default function ServerManager() {
   return (
     <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-zinc-200">Server</h2>
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-200">
+          <Icon name="server" className="h-4 w-4 text-emerald-400" />
+          Server
+        </h2>
         <span
           className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
             status
@@ -143,7 +148,8 @@ export default function ServerManager() {
       {storage && (
         <div className="mt-6">
           <div className="flex items-center justify-between">
-            <label className="text-sm text-zinc-400">
+            <label className="flex items-center gap-1.5 text-sm text-zinc-400">
+              <Icon name="hardDrive" className="h-4 w-4 text-zinc-500" />
               Recordings on disk
               <InfoTip title="Storage used">
                 How much space your recordings are using, and how it compares to
@@ -179,7 +185,10 @@ export default function ServerManager() {
                   key={c.camera}
                   className="flex items-center justify-between rounded-lg bg-zinc-950/60 px-3 py-2"
                 >
-                  <span className="text-sm text-zinc-300">{c.camera}</span>
+                  <span className="flex items-center gap-1.5 text-sm text-zinc-300">
+                    <Icon name="camera" className="h-3.5 w-3.5 text-zinc-500" />
+                    {c.camera}
+                  </span>
                   <span className="text-sm text-zinc-500">{formatBytes(c.bytes)}</span>
                 </div>
               ))}
@@ -193,9 +202,16 @@ export default function ServerManager() {
         <button
           onClick={handleRestart}
           disabled={restarting}
-          className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-800 disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-800 disabled:opacity-50"
         >
-          {restarting ? "Restarting…" : "Restart server"}
+          {restarting ? (
+            <Spinner className="h-4 w-4" label="Restarting…" />
+          ) : (
+            <>
+              <Icon name="refresh" className="h-4 w-4" />
+              Restart server
+            </>
+          )}
         </button>
         {restartMsg && <span className="text-sm text-zinc-400">{restartMsg}</span>}
       </div>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Shell from "@/components/Shell";
 import AuthGate from "@/components/AuthGate";
+import Icon from "@/components/Icon";
 import { useAuth } from "@/lib/auth";
 import { api, type Clip } from "@/lib/api";
 import { formatDate, formatDuration, motionLabel } from "@/lib/format";
@@ -55,7 +56,10 @@ export default function Home() {
         <div className="mx-auto max-w-6xl px-4 py-6 sm:px-8 sm:py-8">
         <header className="mb-6 flex flex-col gap-3 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Timeline</h1>
+            <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+              <Icon name="timeline" className="h-6 w-6 text-emerald-400" />
+              Timeline
+            </h1>
             <p className="mt-1 text-sm text-zinc-500">
               {filtered.length} recorded clip{filtered.length === 1 ? "" : "s"}
             </p>
@@ -75,8 +79,9 @@ export default function Home() {
             </select>
             <button
               onClick={() => setReloadKey((k) => k + 1)}
-              className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition-colors hover:bg-zinc-800"
+              className="flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition-colors hover:bg-zinc-800"
             >
+              <Icon name="refresh" className="h-3.5 w-3.5" />
               Refresh
             </button>
           </div>
@@ -96,8 +101,10 @@ export default function Home() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-800 py-24 text-center">
-            <div className="text-4xl">🎥</div>
-            <p className="mt-4 text-sm text-zinc-400">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-900 text-zinc-500">
+              <Icon name="film" className="h-8 w-8" />
+            </div>
+            <p className="mt-4 text-sm font-medium text-zinc-300">
               {category === "all" ? "No recordings yet" : `No ${category} recordings`}
             </p>
             <p className="mt-1 max-w-sm text-xs text-zinc-600">
@@ -153,9 +160,7 @@ function ClipCard({
             aria-label={`Play ${clip.filename}`}
           >
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/90 text-zinc-950 shadow-lg transition-transform group-hover:scale-105">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M8 5v14l11-7z" />
-              </svg>
+              <Icon name="play" className="ml-0.5 h-6 w-6" />
             </div>
           </button>
         )}
@@ -163,27 +168,38 @@ function ClipCard({
 
       <div className="p-4">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-zinc-200">{clip.camera}</span>
+          <span className="flex items-center gap-1.5 text-sm font-medium text-zinc-200">
+            <Icon name="camera" className="h-3.5 w-3.5 text-zinc-500" />
+            {clip.camera}
+          </span>
           <div className="flex items-center gap-2">
             <CategoryBadge category={clip.category} />
             <MotionBadge score={clip.motion_score} />
           </div>
         </div>
-        <div className="mt-1 text-xs text-zinc-500">{formatDate(clip.start_utc)}</div>
+        <div className="mt-1 flex items-center gap-1.5 text-xs text-zinc-500">
+          <Icon name="clock" className="h-3 w-3" />
+          {formatDate(clip.start_utc)}
+        </div>
         <div className="mt-3 flex items-center justify-between text-xs">
-          <span className="text-zinc-400">⏱ {formatDuration(clip.duration_s)}</span>
+          <span className="flex items-center gap-1.5 text-zinc-400">
+            <Icon name="video" className="h-3.5 w-3.5" />
+            {formatDuration(clip.duration_s)}
+          </span>
           <div className="flex gap-2">
             <a
               href={api.downloadUrl(clip.filename)}
               download
-              className="rounded-md border border-zinc-700 px-2 py-1 text-zinc-300 transition-colors hover:bg-zinc-800"
+              className="flex items-center gap-1.5 rounded-md border border-zinc-700 px-2 py-1 text-zinc-300 transition-colors hover:bg-zinc-800"
             >
+              <Icon name="download" className="h-3.5 w-3.5" />
               Download
             </a>
             <button
               onClick={onDelete}
-              className="rounded-md border border-zinc-700 px-2 py-1 text-zinc-400 transition-colors hover:border-red-900 hover:bg-red-950/40 hover:text-red-300"
+              className="flex items-center gap-1.5 rounded-md border border-zinc-700 px-2 py-1 text-zinc-400 transition-colors hover:border-red-900 hover:bg-red-950/40 hover:text-red-300"
             >
+              <Icon name="trash" className="h-3.5 w-3.5" />
               Delete
             </button>
           </div>

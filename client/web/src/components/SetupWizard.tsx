@@ -4,6 +4,8 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import BouncingDots from "@/components/BouncingDots";
+import Icon from "@/components/Icon";
+import InfoTip from "@/components/InfoTip";
 
 interface ParsedCamera {
   host: string;
@@ -143,7 +145,8 @@ export default function SetupWizard({ onDone }: { onDone: () => void }) {
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-8">
           {step === 1 && (
             <>
-              <h1 className="text-2xl font-semibold tracking-tight">
+              <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+                <Icon name="camera" className="h-6 w-6 text-emerald-400" />
                 Let&apos;s add your camera
               </h1>
               <p className="mt-2 text-sm text-zinc-500">
@@ -152,6 +155,13 @@ export default function SetupWizard({ onDone }: { onDone: () => void }) {
                 <code className="rounded bg-zinc-800 px-1.5 py-0.5 text-xs text-emerald-400">
                   rtsp://...
                 </code>
+                <InfoTip title="Where do I find this?">
+                  Open your camera&apos;s app or manual and look for a
+                  &quot;stream link&quot;, &quot;RTSP URL&quot;, or
+                  &quot;media URL&quot;. It starts with{" "}
+                  <code>rtsp://</code>. If you can&apos;t find it, check the
+                  camera&apos;s box or the manufacturer&apos;s website.
+                </InfoTip>
               </p>
 
               <div className="mt-6">
@@ -174,7 +184,8 @@ export default function SetupWizard({ onDone }: { onDone: () => void }) {
                     onChange={(e) => setCameraName(e.target.value)}
                     className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-emerald-500"
                   />
-                  <p className="mt-2 text-xs text-zinc-500">
+                  <p className="mt-2 flex items-center gap-1.5 text-xs text-zinc-500">
+                    <Icon name="check" className="h-3 w-3 text-emerald-400" />
                     Found: <span className="text-zinc-300">{parsed.host}</span>
                   </p>
                 </div>
@@ -186,25 +197,33 @@ export default function SetupWizard({ onDone }: { onDone: () => void }) {
                 </div>
               )}
 
-              <div className="mt-6 flex gap-3">
+              <div className="mt-6 flex flex-wrap items-center gap-3">
                 <button
                   onClick={handleParse}
                   disabled={!link}
-                  className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-800 disabled:opacity-50"
+                  className="flex items-center gap-1.5 rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-800 disabled:opacity-50"
                 >
+                  <Icon name="arrowRight" className="h-4 w-4" />
                   Read link
                 </button>
                 {parsed && (
                   <button
                     onClick={handleTest}
                     disabled={testing}
-                    className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                    className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                       testing
                         ? "border border-emerald-500/60 bg-transparent text-emerald-300"
                         : "bg-emerald-500 text-zinc-950 hover:bg-emerald-400"
                     }`}
                   >
-                    {testing ? <BouncingDots /> : "Test connection"}
+                    {testing ? (
+                      <BouncingDots />
+                    ) : (
+                      <>
+                        <Icon name="wifi" className="h-4 w-4" />
+                        Test connection
+                      </>
+                    )}
                   </button>
                 )}
               </div>
@@ -217,7 +236,13 @@ export default function SetupWizard({ onDone }: { onDone: () => void }) {
                       : "border-amber-900/50 bg-amber-950/40 text-amber-300"
                   }`}
                 >
-                  <p>{testResult.message}</p>
+                  <p className="flex items-center gap-1.5">
+                    <Icon
+                      name={testResult.ok ? "check" : "help"}
+                      className="h-4 w-4"
+                    />
+                    {testResult.message}
+                  </p>
                   {!testResult.ok && testResult.tips.length > 0 && (
                     <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-amber-200/80">
                       {testResult.tips.map((tip, i) => (
@@ -232,9 +257,16 @@ export default function SetupWizard({ onDone }: { onDone: () => void }) {
                 <button
                   onClick={handleAddCamera}
                   disabled={busy}
-                  className="mt-6 w-full rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 transition-colors hover:bg-emerald-400 disabled:opacity-50"
+                  className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 transition-colors hover:bg-emerald-400 disabled:opacity-50"
                 >
-                  {busy ? "Adding…" : "Add camera & continue"}
+                  {busy ? (
+                    <BouncingDots />
+                  ) : (
+                    <>
+                      Add camera & continue
+                      <Icon name="arrowRight" className="h-4 w-4" />
+                    </>
+                  )}
                 </button>
               )}
             </>
@@ -242,7 +274,8 @@ export default function SetupWizard({ onDone }: { onDone: () => void }) {
 
           {step === 2 && (
             <>
-              <h1 className="text-2xl font-semibold tracking-tight">
+              <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+                <Icon name="shield" className="h-6 w-6 text-emerald-400" />
                 Protect your recordings
               </h1>
               <p className="mt-2 text-sm text-zinc-500">
@@ -273,17 +306,24 @@ export default function SetupWizard({ onDone }: { onDone: () => void }) {
               <button
                 onClick={handleFinish}
                 disabled={busy}
-                className="mt-6 w-full rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 transition-colors hover:bg-emerald-400 disabled:opacity-50"
+                className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 transition-colors hover:bg-emerald-400 disabled:opacity-50"
               >
-                {busy ? "Finishing…" : "Finish setup"}
+                {busy ? (
+                  <BouncingDots />
+                ) : (
+                  <>
+                    Finish setup
+                    <Icon name="arrowRight" className="h-4 w-4" />
+                  </>
+                )}
               </button>
             </>
           )}
 
           {step === 3 && (
             <div className="text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 text-2xl text-emerald-400">
-                ✓
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400">
+                <Icon name="check" className="h-7 w-7" />
               </div>
               <h1 className="mt-4 text-2xl font-semibold tracking-tight">
                 You&apos;re all set!
@@ -294,9 +334,10 @@ export default function SetupWizard({ onDone }: { onDone: () => void }) {
               </p>
               <button
                 onClick={onDone}
-                className="mt-6 w-full rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 transition-colors hover:bg-emerald-400"
+                className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 transition-colors hover:bg-emerald-400"
               >
                 Go to Live view
+                <Icon name="arrowRight" className="h-4 w-4" />
               </button>
             </div>
           )}

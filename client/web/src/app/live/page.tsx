@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Shell from "@/components/Shell";
 import AuthGate from "@/components/AuthGate";
+import Icon from "@/components/Icon";
 import { useAuth } from "@/lib/auth";
 import { api, type LiveCamera } from "@/lib/api";
 
@@ -41,7 +42,10 @@ export default function LivePage() {
         <div className="mx-auto max-w-6xl px-4 py-6 sm:px-8 sm:py-8">
         <header className="mb-6 flex flex-col gap-3 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Live</h1>
+            <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+              <Icon name="live" className="h-6 w-6 text-emerald-400" />
+              Live
+            </h1>
             <p className="mt-1 text-sm text-zinc-500">
               Watch your cameras in real time.
             </p>
@@ -52,12 +56,13 @@ export default function LivePage() {
                 <button
                   key={cam.name}
                   onClick={() => setSelected(cam.name)}
-                  className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                  className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors ${
                     selected === cam.name
                       ? "border-emerald-500 bg-emerald-500/15 text-emerald-300"
                       : "border-zinc-700 text-zinc-300 hover:bg-zinc-800"
                   }`}
                 >
+                  <Icon name="camera" className="h-3.5 w-3.5" />
                   {cam.name}
                 </button>
               ))}
@@ -75,8 +80,10 @@ export default function LivePage() {
           <div className="aspect-video w-full animate-pulse rounded-xl bg-zinc-900" />
         ) : cameras.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-800 py-24 text-center">
-            <div className="text-4xl">📷</div>
-            <p className="mt-4 text-sm text-zinc-400">No cameras set up yet</p>
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-900 text-zinc-500">
+              <Icon name="camera" className="h-8 w-8" />
+            </div>
+            <p className="mt-4 text-sm font-medium text-zinc-300">No cameras set up yet</p>
             <p className="mt-1 max-w-sm text-xs text-zinc-600">
               Add your camera in the{" "}
               <span className="text-zinc-400">Settings</span> tab and it will
