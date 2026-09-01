@@ -36,6 +36,19 @@ client/web/.next/
 client/web/node_modules/
 client/web/out/
 
+# Electron desktop app (client/desktop)
+client/desktop/node_modules/
+client/desktop/dist/
+client/desktop/release/
+client/desktop/build/
+client/desktop/*.txt
+
+# Session store (local auth state)
+.wt_sessions.json
+
+# YOLO model weights (downloaded on demand)
+*.pt
+
 # Editor
 .vscode/
 .idea/

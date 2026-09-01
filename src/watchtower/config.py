@@ -6,9 +6,24 @@ Keeps credentials out of code: everything comes from ``config.json``
 from __future__ import annotations
 
 import json
+import os
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import quote, unquote, urlparse
+
+
+def default_data_dir() -> Path:
+    """Return the folder where Watchtower keeps its config and recordings.
+
+    On Windows this is ``%APPDATA%/Watchtower``; elsewhere it's
+    ``~/.watchtower``. This lets the installable app work without touching
+    the repo folder or needing admin rights.
+    """
+    if sys.platform == "win32":
+        base = os.environ.get("APPDATA") or str(Path.home())
+        return Path(base) / "Watchtower"
+    return Path.home() / ".watchtower"
 
 
 def parse_rtsp_url(url: str) -> dict:
@@ -83,13 +98,15 @@ class Config:
     log_level: str = "INFO"        # DEBUG | INFO | WARNING | ERROR
     timezone: str = "UTC"          # display timezone for clip timestamps
     notifications_enabled: bool = False  # future: webhook/email on motion
+    auto_start: bool = False       # run Watchtower automatically at login/startup
     web_port: int = 8000           # port for the browser UI / API server
     api_token: str = ""            # optional bearer token for the API ("" = no auth)
     ui_password: str = ""          # password to access the web UI ("" = no login)
 
     @classmethod
     def from_file(cls, path: Path | str) -> "Config":
-        raw = json.loads(Path(path).read_text(encoding="utf-8"))
+        path = Path(path)
+        raw = json.loads(path.read_text(encoding="utf-8"))
 
         # Support both the newer "cameras": [ ... ] list and the legacy
         # singular "camera": { ... } shape from the original config.json.
@@ -102,6 +119,10 @@ class Config:
 
         cameras = [cls._parse_camera(c) for c in items]
         out = Path(raw.get("output_dir", "recordings"))
+        # Resolve relative output_dir against the config file's folder so a
+        # packaged app (config in %APPDATA%) records next to its config.
+        if not out.is_absolute():
+            out = path.parent / out
         return cls(
             cameras=cameras,
             output_dir=out,
@@ -112,6 +133,7 @@ class Config:
             log_level=raw.get("log_level", "INFO"),
             timezone=raw.get("timezone", "UTC"),
             notifications_enabled=bool(raw.get("notifications_enabled", False)),
+            auto_start=bool(raw.get("auto_start", False)),
             web_port=int(raw.get("web_port", 8000)),
             api_token=raw.get("api_token", ""),
             ui_password=str(raw.get("ui_password", "")),

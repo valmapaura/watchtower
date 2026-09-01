@@ -14,6 +14,13 @@ def test_category_class_ids_mapping():
 
 def test_object_detector_requires_ultralytics():
     """Without ultralytics installed, inference raises a clear error."""
+    try:
+        import ultralytics  # noqa: F401
+    except ImportError:
+        pass
+    else:
+        pytest.skip("ultralytics is installed; this test needs it absent")
+
     det = ObjectDetector(categories=["person"])
     with pytest.raises(RuntimeError, match="ultralytics"):
         det.motion_score(None)

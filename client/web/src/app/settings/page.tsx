@@ -7,6 +7,7 @@ import InfoTip from "@/components/InfoTip";
 import AddCameraModal from "@/components/AddCameraModal";
 import ServerManager from "@/components/ServerManager";
 import Accordion from "@/components/Accordion";
+import YoloSetup from "@/components/YoloSetup";
 import Icon from "@/components/Icon";
 import Spinner from "@/components/Spinner";
 import PageTransition from "@/components/PageTransition";
@@ -32,6 +33,21 @@ export default function SettingsPage() {
     message: string;
     tips: string[];
   } | null>(null);
+  const [notifTesting, setNotifTesting] = useState(false);
+  const [notifResult, setNotifResult] = useState<string | null>(null);
+
+  const handleTestNotification = async () => {
+    setNotifTesting(true);
+    setNotifResult(null);
+    try {
+      const res = await api.testNotification();
+      setNotifResult(res.message);
+    } catch (e) {
+      setNotifResult(e instanceof Error ? e.message : "Couldn't send test notification");
+    } finally {
+      setNotifTesting(false);
+    }
+  };
 
   const handleTestCamera = async (cam: CameraSettings) => {
     setTesting(cam.name);
@@ -75,6 +91,16 @@ export default function SettingsPage() {
       setSettings(await api.getSettings());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load settings");
+    }
+  };
+
+  const handleAutoStart = async (enabled: boolean) => {
+    setError(null);
+    try {
+      await api.setAutoStart(enabled);
+      setSettings((prev) => (prev ? { ...prev, auto_start: enabled } : prev));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't update auto-start");
     }
   };
 
@@ -190,6 +216,38 @@ export default function SettingsPage() {
             {/* Server status + storage manager */}
             <ServerManager />
 
+            {/* Auto-start on boot */}
+            <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-200">
+                    <Icon name="sparkles" className="h-4 w-4 text-emerald-400" />
+                    Start automatically
+                  </h2>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Run Watchtower when your computer starts, so it records even
+                    if you forget to open it.
+                  </p>
+                </div>
+                <label className="flex cursor-pointer items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={settings.auto_start}
+                    onChange={(e) => handleAutoStart(e.target.checked)}
+                    className="h-4 w-4 accent-emerald-500"
+                  />
+                  <span className="text-sm text-zinc-400">
+                    {settings.auto_start ? "On" : "Off"}
+                  </span>
+                </label>
+              </div>
+              <InfoTip title="Start automatically">
+                When on, Watchtower launches by itself whenever you log in to
+                your computer — no need to open it manually. Turn it off if you
+                only want to use it occasionally.
+              </InfoTip>
+            </section>
+
             {/* General */}
             <Accordion
               title="Recording storage"
@@ -254,6 +312,25 @@ export default function SettingsPage() {
                   <InfoTip title="Motion alerts">
                     Get a pop-up on your computer when your camera spots movement.
                   </InfoTip>
+                  <div className="mt-2">
+                    <button
+                      onClick={handleTestNotification}
+                      disabled={notifTesting}
+                      className="flex items-center gap-1.5 rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 transition-colors hover:bg-zinc-800 disabled:opacity-50"
+                    >
+                      {notifTesting ? (
+                        <Spinner className="h-3 w-3" label="Sending…" />
+                      ) : (
+                        <>
+                          <Icon name="bell" className="h-3.5 w-3.5" />
+                          Send a test notification
+                        </>
+                      )}
+                    </button>
+                    {notifResult && (
+                      <p className="mt-1.5 text-xs text-zinc-400">{notifResult}</p>
+                    )}
+                  </div>
                 </Field>
               </div>
             </Accordion>
@@ -393,6 +470,8 @@ export default function SettingsPage() {
                     <option value="object">Smart — recognise people, vehicles, animals</option>
                   </select>
                 </div>
+
+                {cam.detector === "object" && <YoloSetup />}
 
                 {cam.detector === "object" && (
                   <div className="mt-5">

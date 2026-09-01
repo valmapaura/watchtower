@@ -10,7 +10,7 @@ import signal
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .config import Config
+from .config import Config, default_data_dir
 from .detector import FrameDiffDetector
 from .notifications import NotificationSender
 from .recorder import MotionRecorder
@@ -21,7 +21,7 @@ from .writer import OpenCvClipWriter
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="watchtower motion recorder")
-    p.add_argument("--config", type=Path, default=Path("config.json"))
+    p.add_argument("--config", type=Path, default=default_data_dir() / "config.json")
     p.add_argument("--once", action="store_true", help="record a single clip and exit (for testing)")
     return p.parse_args()
 

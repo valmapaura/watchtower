@@ -29,7 +29,8 @@ from pydantic import BaseModel
 
 from .config import Config, parse_rtsp_url
 from .live import LiveStream
-from .storage import LocalDiskBackend
+from .notifications import NotificationSender
+from .storage import ClipMetadata, LocalDiskBackend
 
 COOKIE_NAME = "wt_session"
 
@@ -39,6 +40,245 @@ RESTART_EXIT_CODE = 42
 
 # Server start time, used to report uptime in /status.
 _START_TIME = time.time()
+
+
+class RecorderManager:
+    """Runs the motion recorder for all cameras in a background thread.
+
+    The web app is the always-on process (started by the launcher or the
+    installable app), so it owns the recorder loop. This lets notifications
+    fire automatically when motion is detected, without a separate process.
+    """
+
+    def __init__(self, config: Config):
+        self._config = config
+        self._thread: threading.Thread | None = None
+        self._stop = threading.Event()
+        self._notifier = NotificationSender(enabled=config.notifications_enabled)
+
+    def start(self) -> None:
+        """Start the recorder thread if it isn't already running."""
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self._stop.clear()
+        stop = self._stop  # capture this generation's stop event
+        self._thread = threading.Thread(
+            target=self._run, args=(stop,), name="watchtower-recorder", daemon=True
+        )
+        self._thread.start()
+
+    def stop(self) -> None:
+        """Signal the recorder thread to stop."""
+        self._stop.set()
+
+    def restart(self) -> None:
+        """Restart the recorder (e.g. after settings change).
+
+        The recorder thread may be blocked reading from a camera, so we can't
+        wait for it to exit. We signal it to stop and start a fresh thread with
+        a NEW stop event, so the old thread can't be re-armed by the new one.
+        """
+        self._stop.set()
+        # Swap in a fresh stop event so the new thread has its own signal.
+        self._stop = threading.Event()
+        self._thread = None
+        self.start()
+
+    def set_notifications(self, enabled: bool) -> None:
+        """Update whether notifications fire, without a full restart."""
+        self._notifier.enabled = bool(enabled)
+
+    def send_test_notification(self) -> bool:
+        """Send a test toast; returns True if one was shown."""
+        return self._notifier.notify("Watchtower", "Test notification", score=100)
+
+    def _run(self, stop: threading.Event) -> None:
+        from .detector import FrameDiffDetector
+        from .recorder import MotionRecorder
+        from .source import RtspFrameSource
+        from .writer import OpenCvClipWriter
+
+        backend = LocalDiskBackend(self._config.output_dir)
+
+        for cam in self._config.cameras:
+            if stop.is_set():
+                break
+            try:
+                source = RtspFrameSource(cam.rtsp_url)
+                detector = self._build_detector(cam)
+                writer = OpenCvClipWriter()
+                recorder = MotionRecorder(
+                    source=source,
+                    detector=detector,
+                    writer=writer,
+                    camera_name=cam.name,
+                    pre_seconds=cam.pre_seconds,
+                    post_seconds=cam.post_seconds,
+                    min_duration=cam.min_duration,
+                    on_clip=self._save_clip(backend, cam),
+                    category_of=self._category_of(detector),
+                )
+                while not stop.is_set():
+                    if not recorder.step():
+                        break
+                source.close()
+            except Exception:
+                # A camera failing shouldn't kill the whole loop; log and move on.
+                import traceback
+
+                traceback.print_exc()
+                continue
+
+        # Enforce retention + storage cap once at the end.
+        backend.cleanup(
+            self._config.retention_days, max_storage_gb=self._config.max_storage_gb
+        )
+
+    def _save_clip(self, backend: LocalDiskBackend, cam):
+        from datetime import datetime, timezone
+
+        def _save(local_path: Path, start_ts: float, motion_score: float, category: str = "motion") -> None:
+            start_utc = datetime.fromtimestamp(start_ts, tz=timezone.utc).isoformat(timespec="seconds")
+            metadata = ClipMetadata(
+                filename=local_path.name,
+                camera=cam.name,
+                start_utc=start_utc,
+                motion_score=motion_score,
+                category=category,
+            )
+            backend.save(local_path, metadata)
+            self._notifier.notify(cam.name, local_path.name, score=motion_score)
+
+        return _save
+
+    @staticmethod
+    def _build_detector(cam):
+        from .detector import FrameDiffDetector
+
+        detector_type = getattr(cam, "detector", "motion")
+        if detector_type == "object":
+            from .detector_objects import ObjectDetector
+
+            categories = getattr(cam, "detect_categories", None) or ["person"]
+            return ObjectDetector(categories=categories)
+        return FrameDiffDetector(sensitivity=cam.sensitivity)
+
+    @staticmethod
+    def _category_of(detector):
+        def _category() -> str:
+            classes = getattr(detector, "detected_classes", None)
+            if classes:
+                return sorted(classes)[0]
+            return "motion"
+
+        return _category
+
+
+def _auto_start_status() -> dict:
+    """Return whether Watchtower is set to start automatically at login."""
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["schtasks", "/Query", "/TN", "WatchtowerRecorder"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        enabled = result.returncode == 0
+    except Exception:
+        enabled = False
+    return {"enabled": enabled}
+
+
+def _set_auto_start(enabled: bool, config_path: Path | None = None) -> dict:
+    """Install or remove the Windows scheduled task that starts Watchtower."""
+    import subprocess
+    import sys
+
+    if config_path is None:
+        from .config import default_data_dir
+
+        config_path = default_data_dir() / "config.json"
+
+    if enabled:
+        # Run the web app (which owns the recorder) at logon/startup.
+        # We wrap the command so the working directory is the config folder,
+        # otherwise relative paths (recordings/, config.json) resolve wrong.
+        if getattr(sys, "frozen", False):
+            # Packaged exe — just run it with the config path.
+            exe = sys.executable
+            args = f'cmd /c "cd /d "{config_path.parent}" && "{exe}" --config "{config_path}""'
+        else:
+            python = sys.executable
+            args = (
+                f'cmd /c "cd /d "{config_path.parent}" && "{python}" -m watchtower.api '
+                f'--config "{config_path}""'
+            )
+        cmd = [
+            "schtasks",
+            "/Create",
+            "/TN",
+            "WatchtowerRecorder",
+            "/TR",
+            args,
+            "/SC",
+            "ONLOGON",
+            "/RL",
+            "LIMITED",
+            "/F",
+        ]
+    else:
+        cmd = ["schtasks", "/Delete", "/TN", "WatchtowerRecorder", "/F"]
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        if result.returncode != 0:
+            return {
+                "ok": False,
+                "message": result.stderr.strip() or "Couldn't update auto-start",
+            }
+    except Exception as e:
+        return {"ok": False, "message": str(e)}
+
+    return {"ok": True, "enabled": enabled}
+
+
+def _ultralytics_installed() -> bool:
+    """Return whether the YOLO object-detection package is available."""
+    try:
+        import ultralytics  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
+def _install_ultralytics() -> dict:
+    """Install ultralytics (and torch) via pip. Returns a status dict.
+
+    This is a large download (~2GB with torch), so it runs in a background
+    thread and the UI polls for progress.
+    """
+    import subprocess
+    import sys
+
+    if _ultralytics_installed():
+        return {"ok": True, "installed": True, "message": "Already installed"}
+
+    def _run():
+        try:
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "ultralytics"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except Exception:
+            pass
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"ok": True, "installed": False, "message": "Installing…"}
 
 
 class LoginRequest(BaseModel):
@@ -130,6 +370,12 @@ class SettingsUpdate(BaseModel):
     notifications_enabled: bool | None = None
 
 
+class AutoStartRequest(BaseModel):
+    """Toggle for running Watchtower automatically at login."""
+
+    enabled: bool
+
+
 class ChangePasswordRequest(BaseModel):
     """Request to change the UI login password."""
 
@@ -170,7 +416,19 @@ def create_app(
     if live_stream_factory is None:
         live_stream_factory = LiveStream
 
-    app = FastAPI(title="watchtower", version="0.1.0")
+    # Run the motion recorder in the background so notifications fire
+    # automatically while the web app is running.
+    recorder = RecorderManager(config)
+
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        recorder.start()
+        yield
+        recorder.stop()
+
+    app = FastAPI(title="watchtower", version="0.1.0", lifespan=lifespan)
 
     # CORS with credentials support so the browser UI can send/receive cookies.
     app.add_middleware(
@@ -293,6 +551,27 @@ def create_app(
         threading.Timer(0.5, lambda: os._exit(RESTART_EXIT_CODE)).start()
         return {"ok": True, "message": "Restarting…"}
 
+    @app.post("/notifications/test", dependencies=[Depends(auth)])
+    def test_notification() -> dict:
+        """Send a test Windows toast so the user can confirm notifications work."""
+        sent = recorder.send_test_notification()
+        if not sent:
+            return {
+                "ok": False,
+                "message": "Notifications aren't available. Make sure they're enabled and you're on Windows.",
+            }
+        return {"ok": True, "message": "Test notification sent ✓"}
+
+    @app.get("/detection/status", dependencies=[Depends(auth)])
+    def detection_status() -> dict:
+        """Return whether the AI object-detection package is installed."""
+        return {"installed": _ultralytics_installed()}
+
+    @app.post("/detection/install", dependencies=[Depends(auth)])
+    def detection_install() -> dict:
+        """Install the AI object-detection package (ultralytics + torch)."""
+        return _install_ultralytics()
+
     @app.get("/live", dependencies=[Depends(auth)])
     def list_live_cameras() -> list[dict]:
         """Return cameras available for live viewing (no credentials)."""
@@ -344,6 +623,7 @@ def create_app(
             "retention_days": config.retention_days,
             "max_storage_gb": config.max_storage_gb,
             "notifications_enabled": config.notifications_enabled,
+            "auto_start": _auto_start_status()["enabled"],
             "cameras": [
                 {
                     "name": c.name,
@@ -410,6 +690,13 @@ def create_app(
             ]
 
         config_path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+
+        # Apply the notifications toggle immediately (no full restart needed).
+        recorder.set_notifications(config.notifications_enabled)
+
+        # Settings changed — restart the recorder so it picks up new cameras
+        # and detection settings.
+        recorder.restart()
         return get_settings()
 
     @app.put("/settings/password", dependencies=[Depends(auth)])
@@ -435,6 +722,23 @@ def create_app(
         creds._enabled = bool(req.new_password)
 
         return {"ok": True}
+
+    @app.put("/settings/auto-start", dependencies=[Depends(auth)])
+    def set_auto_start(req: AutoStartRequest) -> dict:
+        """Enable/disable running Watchtower automatically at login."""
+        if config_path is None:
+            raise HTTPException(status_code=400, detail="Settings persistence is disabled")
+
+        result = _set_auto_start(req.enabled, config_path)
+        if not result.get("ok"):
+            raise HTTPException(status_code=400, detail=result.get("message", "Failed"))
+
+        # Persist the preference so the UI reflects it on next load.
+        raw = json.loads(config_path.read_text(encoding="utf-8"))
+        raw["auto_start"] = req.enabled
+        config_path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+        config.auto_start = req.enabled
+        return {"ok": True, "enabled": req.enabled}
 
     @app.post("/camera/parse", dependencies=[Depends(auth)])
     def parse_camera(req: ParseRtspRequest) -> dict:
@@ -471,6 +775,7 @@ def create_app(
         cameras.append(req.model_dump())
         config_path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
         config.cameras = [Config._parse_camera(c) for c in cameras]
+        recorder.restart()
         return {"ok": True, "name": req.name}
 
     @app.delete("/camera/{camera_name}", dependencies=[Depends(auth)])
@@ -488,6 +793,7 @@ def create_app(
         raw["cameras"] = remaining
         config_path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
         config.cameras = [Config._parse_camera(c) for c in remaining]
+        recorder.restart()
         return {"deleted": camera_name}
 
     @app.delete("/cameras", dependencies=[Depends(auth)])
@@ -500,6 +806,7 @@ def create_app(
         raw["cameras"] = []
         config_path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
         config.cameras = []
+        recorder.restart()
         return {"deleted": len(config.cameras)}
 
     return app
@@ -596,11 +903,38 @@ def main() -> None:
 
     import uvicorn
 
+    from .config import default_data_dir
+
     p = argparse.ArgumentParser(description="watchtower web API")
-    p.add_argument("--config", type=Path, default=Path("config.json"))
+    p.add_argument(
+        "--config",
+        type=Path,
+        default=default_data_dir() / "config.json",
+        help="config.json path (default: %APPDATA%/Watchtower/config.json)",
+    )
     p.add_argument("--host", default="127.0.0.1", help="bind address (default: localhost)")
     p.add_argument("--port", type=int, default=None, help="override config web_port")
     args = p.parse_args()
+
+    # First run: create a default config so the app "just works" without the
+    # user having to find or copy a config file.
+    if not args.config.exists():
+        args.config.parent.mkdir(parents=True, exist_ok=True)
+        args.config.write_text(
+            json.dumps(
+                {
+                    "output_dir": "recordings",
+                    "retention_days": 30,
+                    "max_storage_gb": 20,
+                    "notifications_enabled": False,
+                    "web_port": 8000,
+                    "ui_password": "",
+                    "cameras": [],
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
 
     cfg = Config.from_file(args.config)
     port = args.port or cfg.web_port

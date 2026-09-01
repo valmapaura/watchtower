@@ -1,0 +1,44 @@
+{
+  "name": "watchtower-desktop",
+  "version": "0.1.0",
+  "description": "Watchtower — self-hosted camera motion recorder desktop app",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "build:backend": "python -m PyInstaller watchtower-backend.spec --noconfirm",
+    "build:frontend": "cd ../web && npm run build",
+    "dist": "npm run build:frontend && npm run build:backend && electron-builder"
+  },
+  "build": {
+    "appId": "com.watchtower.app",
+    "productName": "Watchtower",
+    "files": [
+      "main.js",
+      "preload.js"
+    ],
+    "extraResources": [
+      {
+        "from": "dist/watchtower-backend.exe",
+        "to": "watchtower-backend.exe"
+      },
+      {
+        "from": "../web/out",
+        "to": "web-out"
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  }
+}
