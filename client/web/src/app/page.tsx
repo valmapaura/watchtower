@@ -242,8 +242,12 @@ function ClipCard({
           </span>
           <div className="flex items-center gap-2">
             <SourceBadge recordedBy={clip.recorded_by} />
-            <CategoryBadge category={clip.category} />
-            <MotionBadge score={clip.motion_score} />
+            {clip.category !== "motion" && (
+              <CategoryBadge category={clip.category} />
+            )}
+            {clip.motion_score > 0 && (
+              <MotionBadge score={clip.motion_score} />
+            )}
           </div>
         </div>
         <div className="mt-1 flex items-center gap-1.5 text-xs text-zinc-500">
