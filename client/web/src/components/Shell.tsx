@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import BackendStatus from "@/components/BackendStatus";
 
 const NAV = [
   { href: "/", label: "Timeline", icon: "▦" },
@@ -61,7 +62,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      <main className="flex-1 overflow-y-auto">
+        <BackendStatus />
+        {children}
+      </main>
     </div>
   );
 }

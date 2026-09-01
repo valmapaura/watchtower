@@ -23,7 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from .config import Config
+from .config import Config, parse_rtsp_url
 from .live import LiveStream
 from .storage import LocalDiskBackend
 
@@ -97,6 +97,28 @@ class SettingsUpdate(BaseModel):
     retention_days: int | None = None
     max_storage_gb: float | None = None
     notifications_enabled: bool | None = None
+
+
+class ChangePasswordRequest(BaseModel):
+    """Request to change the UI login password."""
+
+    current_password: str = ""
+    new_password: str
+
+
+class ParseRtspRequest(BaseModel):
+    url: str
+
+
+class AddCameraRequest(BaseModel):
+    """A camera to add. Passwords are stored in config.json (git-ignored)."""
+
+    name: str
+    host: str
+    rtsp_port: int = 554
+    username: str = "admin"
+    password: str = ""
+    rtsp_path: str = "/live/ch0"
 
 
 def create_app(
@@ -288,6 +310,67 @@ def create_app(
         config_path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
         return get_settings()
 
+    @app.put("/settings/password", dependencies=[Depends(auth)])
+    def change_password(req: ChangePasswordRequest) -> dict:
+        """Change the UI login password (persisted to config.json)."""
+        if config_path is None:
+            raise HTTPException(status_code=400, detail="Settings persistence is disabled")
+
+        # If a password is currently set, require the current one to change it.
+        if creds.enabled and not creds.verify(req.current_password):
+            raise HTTPException(status_code=401, detail="Current password is incorrect")
+
+        if len(req.new_password) < 4:
+            raise HTTPException(status_code=400, detail="Password must be at least 4 characters")
+
+        raw = json.loads(config_path.read_text(encoding="utf-8"))
+        raw["ui_password"] = req.new_password
+        config_path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+
+        # Update the live checker so the new password takes effect immediately.
+        config.ui_password = req.new_password
+        creds._stored = req.new_password
+        creds._enabled = bool(req.new_password)
+
+        return {"ok": True}
+
+    @app.post("/camera/parse", dependencies=[Depends(auth)])
+    def parse_camera(req: ParseRtspRequest) -> dict:
+        """Parse a pasted RTSP link into camera fields."""
+        try:
+            return parse_rtsp_url(req.url)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    @app.post("/camera/test", dependencies=[Depends(auth)])
+    def test_camera(req: AddCameraRequest) -> dict:
+        """Try to connect to a camera and report whether it works.
+
+        Returns a friendly ``message`` and ``tips`` list on failure so the UI
+        can guide a non-technical user through troubleshooting.
+        """
+        cam = Config._parse_camera(req.model_dump())
+        ok, message, tips = _test_rtsp_connection(cam)
+        return {"ok": ok, "message": message, "tips": tips}
+
+    @app.post("/camera", dependencies=[Depends(auth)])
+    def add_camera(req: AddCameraRequest) -> dict:
+        """Add a camera to config.json (persisted)."""
+        if config_path is None:
+            raise HTTPException(status_code=400, detail="Settings persistence is disabled")
+
+        raw = json.loads(config_path.read_text(encoding="utf-8"))
+        cameras = raw.setdefault("cameras", [])
+
+        # Avoid duplicate names.
+        if any(c.get("name") == req.name for c in cameras):
+            raise HTTPException(status_code=400, detail="A camera with that name already exists")
+
+        cameras.append(req.model_dump())
+        config_path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+        config.cameras = [Config._parse_camera(c) for c in cameras]
+        return {"ok": True, "name": req.name}
+
     return app
 
 
@@ -306,6 +389,62 @@ def _resolve_clip(backend: LocalDiskBackend, clip_id: str) -> Path:
         if path.name == name:
             return path
     raise HTTPException(status_code=404, detail="Clip not found")
+
+
+def _test_rtsp_connection(cam, timeout: float = 5.0) -> tuple[bool, str, list[str]]:
+    """Try to open the camera's RTSP stream, with a timeout.
+
+    Returns (ok, message, tips). On failure, ``tips`` holds plain-language
+    troubleshooting steps for a non-technical user. The connection attempt runs
+    in a thread so it can't hang the request if the camera is unreachable.
+    """
+    import threading
+
+    result: dict = {}
+
+    def _attempt():
+        try:
+            import cv2
+        except ImportError:  # pragma: no cover - env-dependent
+            result["error"] = "Video support isn't installed."
+            return
+        cap = cv2.VideoCapture(cam.rtsp_url)
+        try:
+            ok, _ = cap.read()
+            result["ok"] = ok
+        finally:
+            cap.release()
+
+    t = threading.Thread(target=_attempt, daemon=True)
+    t.start()
+    t.join(timeout)
+
+    if "error" in result:
+        return (False, result["error"], ["Install OpenCV and try again."])
+    if "ok" not in result:
+        # Timed out — the camera is unreachable.
+        return (
+            False,
+            "Couldn't connect to the camera.",
+            [
+                "Make sure your computer and camera are on the same network (Wi-Fi).",
+                "Check that the camera is powered on and connected.",
+                "Double-check the username and password in the link.",
+                "If it still fails, restart the camera and try again.",
+            ],
+        )
+    if result["ok"]:
+        return (True, "Connected! Your camera is working.", [])
+    return (
+        False,
+        "Couldn't connect to the camera.",
+        [
+            "Make sure your computer and camera are on the same network (Wi-Fi).",
+            "Check that the camera is powered on and connected.",
+            "Double-check the username and password in the link.",
+            "If it still fails, restart the camera and try again.",
+        ],
+    )
 
 
 def _mjpeg_generator(stream: LiveStream):

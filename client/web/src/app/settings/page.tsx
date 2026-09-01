@@ -14,6 +14,24 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [pwCurrent, setPwCurrent] = useState("");
+  const [pwNew, setPwNew] = useState("");
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwSaved, setPwSaved] = useState(false);
+
+  const handleChangePassword = async () => {
+    setPwError(null);
+    setPwSaved(false);
+    try {
+      await api.changePassword(pwCurrent, pwNew);
+      setPwCurrent("");
+      setPwNew("");
+      setPwSaved(true);
+      setTimeout(() => setPwSaved(false), 2500);
+    } catch (e) {
+      setPwError(e instanceof Error ? e.message : "Couldn't change password");
+    }
+  };
 
   useEffect(() => {
     if (!authenticated) return;
@@ -340,6 +358,51 @@ export default function SettingsPage() {
                 </label>
               </section>
             ))}
+
+            {/* Change password */}
+            <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6">
+              <h2 className="text-sm font-semibold text-zinc-200">
+                Change app password
+              </h2>
+              <p className="mt-1 text-xs text-zinc-500">
+                The password you use to sign in to Watchtower.
+              </p>
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Current password">
+                  <input
+                    type="password"
+                    value={pwCurrent}
+                    onChange={(e) => setPwCurrent(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-emerald-500"
+                  />
+                </Field>
+                <Field label="New password">
+                  <input
+                    type="password"
+                    value={pwNew}
+                    onChange={(e) => setPwNew(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-emerald-500"
+                  />
+                </Field>
+              </div>
+              {pwError && (
+                <div className="mt-3 rounded-lg border border-red-900/50 bg-red-950/40 px-4 py-2 text-sm text-red-300">
+                  {pwError}
+                </div>
+              )}
+              {pwSaved && (
+                <div className="mt-3 rounded-lg border border-emerald-900/50 bg-emerald-950/40 px-4 py-2 text-sm text-emerald-300">
+                  Password updated ✓
+                </div>
+              )}
+              <button
+                onClick={handleChangePassword}
+                disabled={!pwNew}
+                className="mt-4 rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-800 disabled:opacity-50"
+              >
+                Update password
+              </button>
+            </section>
 
             <div className="flex items-center gap-4">
               <button

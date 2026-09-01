@@ -8,7 +8,35 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlparse
+
+
+def parse_rtsp_url(url: str) -> dict:
+    """Parse an ``rtsp://user:pass@host:port/path`` link into camera parts.
+
+    Lets a noob paste their camera's stream link and have the app fill in
+    host, username, password, and path automatically. Returns a dict with
+    keys: host, rtsp_port, username, password, rtsp_path.
+    """
+    parsed = urlparse(url.strip())
+    if parsed.scheme not in ("rtsp", "rtsps"):
+        raise ValueError("That doesn't look like an RTSP link (should start with rtsp://)")
+
+    host = parsed.hostname or ""
+    port = parsed.port or 554
+    username = unquote(parsed.username) if parsed.username else "admin"
+    password = unquote(parsed.password) if parsed.password else ""
+    path = parsed.path or "/live/ch0"
+    if not path.startswith("/"):
+        path = "/" + path
+
+    return {
+        "host": host,
+        "rtsp_port": port,
+        "username": username,
+        "password": password,
+        "rtsp_path": path,
+    }
 
 
 @dataclass

@@ -248,3 +248,72 @@ def test_live_stream_returns_mjpeg_media_type(tmp_path):
     # The body should contain the MJPEG frame boundary + JPEG bytes.
     assert b"--frame" in resp.content
     assert b"fakejpeg" in resp.content
+
+
+# --- camera setup --------------------------------------------------------
+
+
+def test_parse_rtsp_link(tmp_path):
+    client = TestClient(create_app(_make_config(tmp_path)))
+    resp = client.post(
+        "/camera/parse",
+        json={"url": "rtsp://admin:secret@192.168.1.50:554/live/ch0"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["host"] == "192.168.1.50"
+    assert body["username"] == "admin"
+    assert body["password"] == "secret"
+    assert body["rtsp_port"] == 554
+    assert body["rtsp_path"] == "/live/ch0"
+
+
+def test_parse_rtsp_invalid_link(tmp_path):
+    client = TestClient(create_app(_make_config(tmp_path)))
+    resp = client.post("/camera/parse", json={"url": "not-a-link"})
+    assert resp.status_code == 400
+
+
+def test_add_camera_persists(tmp_path):
+    cfg_path = _write_config(tmp_path)
+    cfg = Config.from_file(cfg_path)
+    client = TestClient(create_app(cfg, config_path=cfg_path))
+    resp = client.post(
+        "/camera",
+        json={
+            "name": "frontdoor",
+            "host": "192.168.1.60",
+            "username": "admin",
+            "password": "pw",
+            "rtsp_path": "/live/ch0",
+        },
+    )
+    assert resp.status_code == 200
+    saved = json.loads(cfg_path.read_text(encoding="utf-8"))
+    assert any(c["name"] == "frontdoor" for c in saved["cameras"])
+
+
+def test_add_camera_duplicate_name(tmp_path):
+    cfg_path = _write_config(tmp_path)
+    cfg = Config.from_file(cfg_path)
+    client = TestClient(create_app(cfg, config_path=cfg_path))
+    resp = client.post(
+        "/camera",
+        json={"name": "cam", "host": "192.168.1.60", "password": "pw"},
+    )
+    assert resp.status_code == 400
+
+
+def test_test_camera_returns_tips_on_failure(tmp_path):
+    # No real camera here, so the connection test should fail gracefully
+    # and return troubleshooting tips.
+    client = TestClient(create_app(_make_config(tmp_path)))
+    resp = client.post(
+        "/camera/test",
+        json={"name": "cam", "host": "192.168.1.99", "password": "pw"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is False
+    assert isinstance(body["tips"], list)
+    assert len(body["tips"]) > 0
